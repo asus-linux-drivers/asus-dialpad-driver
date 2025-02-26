@@ -181,14 +181,14 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
 
     echo
 
-    echo "Installation finished succesfully"
+    echo "Installation finished successfully"
 
     echo
 
     END_TIME=${EPOCHREALTIME::-7}
     source install_finished_send_anonymous_report.sh
 
-    echo "Installation finished succesfully"
+    echo "Installation finished successfully"
 
     echo
 

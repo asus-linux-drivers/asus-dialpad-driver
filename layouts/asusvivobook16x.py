@@ -3,11 +3,10 @@ from libevdev import EV_KEY
 top_right_icon_width = 250
 top_right_icon_height = 250
 
-# TODO: not validated (atleast the paddings have to be probably increased based on image = increasing circle_center_x and circle_center_y)
-circle_diameter = 919
-center_button_diameter = 364
-circle_center_x = 586
-circle_center_y = 573
+circle_diameter = 1400
+center_button_diameter = 250
+circle_center_x = 770
+circle_center_y = 750
 
 app_shortcuts = {
     "code": {

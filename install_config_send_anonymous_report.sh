@@ -23,7 +23,7 @@ EVENT_NAME="install_config"
 DISABLE_DUE_INACTIVITY_TIME=$(cat $CONFIG_FILE_PATH | grep disable_due_inactivity_time | cut -d '=' -f2 | head -n 1 | xargs)
 TOUCHPAD_DISABLES_DIALPAD=$(cat $CONFIG_FILE_PATH | grep touchpad_disables_dialpad | cut -d '=' -f2 | head -n 1 | xargs)
 ACTIVATION_TIME=$(cat $CONFIG_FILE_PATH | grep activation_time | cut -d '=' -f2 | head -n 1 |  xargs)
-DRIVER_VERSION=$(cat CHANGELOG.md | grep -Po '(?<=### )[^ ]*' | head -1)
+DRIVER_VERSION=$(cat CHANGELOG.md | grep -Po '(?<=## )[^ ]*' | head -1)
 
 CURL_PAYLOAD='{
     "client_id": "'${CLIENT_ID}'",

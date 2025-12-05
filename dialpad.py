@@ -12,7 +12,7 @@ import Xlib.XK
 from xkbcommon import xkb
 from libevdev import EV_ABS, EV_KEY, EV_LED, EV_MSC, EV_SYN, Device, InputEvent, const, device
 from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO, AsyncNotifier
-from smbus2 import SMBus, i2c_msg
+from periphery import I2C
 from typing import Optional
 import re
 import math
@@ -190,13 +190,27 @@ while try_times > 0:
     sleep(try_sleep)
 
 # Open a handle to "/dev/i2c-x", representing the I2C bus
+path = f"/dev/i2c-{device_id}"
 try:
-    bus = SMBus()
-    bus.open(int(device_id))
-    bus.close()
-except:
-    log.error("Can't open the I2C bus connection (id: %s)", device_id)
-    sys.exit(1)
+    # Prefer python-periphery if it works
+    i2c = I2C(path)
+    i2c.close()
+    log.debug("Successfully opened I2C bus via python-periphery at %s", path)
+except Exception as e:
+    log.debug("periphery.I2C failed to open %s: %s, trying raw open()", path, e)
+    try:
+        # Fallback: try to open the device file directly
+        with open(path, "rb+", buffering=0) as f:
+            pass
+        log.debug("Successfully opened I2C bus via raw open() at %s", path)
+    except Exception as e2:
+        log.error(
+            "Can not open the I2C bus connection (id: %s) at %s: %s",
+            device_id,
+            path,
+            e2,
+        )
+        sys.exit(1)
 
 # App-specific configuration (add more mappings as needed)
 
@@ -336,13 +350,45 @@ def load_all_config_values():
 def send_value_to_touchpad_via_i2c(value):
     global device_id, device_addr
 
+    # Payload is the same as before, only the transport changes
+    data = [
+        0x05, 0x00, 0x3d, 0x03, 0x06, 0x00, 0x07, 0x00,
+        0x0d, 0x14, 0x03, int(value, 16), 0xad,
+    ]
+
+    path = f"/dev/i2c-{device_id}"
+
+    # 1) Try python-periphery first
     try:
-        with SMBus(int(device_id)) as bus:
-            data = [0x05, 0x00, 0x3d, 0x03, 0x06, 0x00, 0x07, 0x00, 0x0d, 0x14, 0x03, int(value, 16), 0xad]
-            msg = i2c_msg.write(device_addr, data)
-            bus.i2c_rdwr(msg)
+        with I2C(path) as i2c:
+            msg = I2C.Message(data)
+            i2c.transfer(device_addr, [msg])
+            log.debug("Sent I2C data via python-periphery on %s", path)
+            return True
     except Exception as e:
-        log.error('Error during sending via i2c: \"%s\"', e)
+        log.debug("periphery.I2C transfer failed on %s: %s; falling back to i2ctransfer", path, e)
+
+    # 2) Fallback: use i2ctransfer (from i2c-tools)
+    try:
+        hex_data = [f"0x{b:02x}" for b in data]
+        cmd = [
+            "i2ctransfer",
+            "-f", "-y",
+            str(device_id),
+            f"w{len(data)}@0x{device_addr:x}",
+        ] + hex_data
+
+        log.debug("Trying I2C via i2ctransfer: %s", " ".join(cmd))
+        result = subprocess.run(cmd, check=True, capture_output=True)
+        log.debug("I2C transfer successful via i2ctransfer")
+        return True
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode().strip() if e.stderr else str(e)
+        log.error("i2ctransfer failed: %s", stderr)
+    except Exception as e:
+        log.error("Error during fallback I2C transfer: %s", e)
+
+    return False
 
 def initialize_virtual_device():
     global uinput_device, dev, modifiers

@@ -10,11 +10,11 @@ let
     libevdev
     xlib
     pyinotify
-    smbus2
     pyasyncore
     pywayland
     xkbcommon
     systemd-python
+    python-periphery
   ]);
 in
 python311Packages.buildPythonPackage {

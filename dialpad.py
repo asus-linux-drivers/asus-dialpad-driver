@@ -26,6 +26,13 @@ import signal
 import mmap
 import shutil
 
+SYSTEMD_JOURNAL_AVAILABLE = False
+try:
+    from systemd.journal import JournalHandler
+    SYSTEMD_JOURNAL_AVAILABLE = True
+except ImportError:
+    pass
+
 QDBUS = shutil.which("qdbus") or shutil.which("qdbus6")
 
 # Logging setup
@@ -34,6 +41,8 @@ logging.basicConfig(
     level=os.environ.get('LOG', 'INFO')
 )
 log = logging.getLogger('asus-dialpad-driver')
+if SYSTEMD_JOURNAL_AVAILABLE:
+    log.addHandler(JournalHandler())
 
 # Detect session type
 xdg_session_type = os.environ.get('XDG_SESSION_TYPE')

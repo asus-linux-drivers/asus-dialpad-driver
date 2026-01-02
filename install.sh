@@ -28,7 +28,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
     fi
 
     # pip pywayland requires gcc
-    if [[ $(command -v apt-get 2>/dev/null) ]]; then
+    if command -v apt-get >/dev/null 2>&1; then
         PACKAGE_MANAGER="apt"
         sudo apt-get -y install ibus libevdev2 curl xinput i2c-tools python3-dev python3-virtualenv libxml2-utils libxkbcommon-dev gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -38,7 +38,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo apt-get -y install qdbus-qt$PLASMA_VER
         fi
 
-    elif [[ $(command -v pacman 2>/dev/null) ]]; then
+    elif command -v pacman >/dev/null 2>&1; then
         PACKAGE_MANAGER="pacman"
         sudo pacman --noconfirm --needed -S ibus libevdev curl xorg-xinput i2c-tools python python-virtualenv libxml2 libxkbcommon gcc pkgconf
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -48,7 +48,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo pacman --noconfirm --needed -S qt$PLASMA_VER-tools
         fi
 
-    elif [[ $(command -v dnf 2>/dev/null) ]]; then
+    elif command -v dnf >/dev/null 2>&1; then
         PACKAGE_MANAGER="dnf"
         sudo dnf -y install ibus libevdev curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -58,7 +58,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo dnf -y install qt$PLASMA_VER-qttools
         fi
 
-    elif [[ $(command -v yum 2>/dev/null) ]]; then
+    elif command -v yum >/dev/null 2>&1; then
         PACKAGE_MANAGER="yum"
         sudo yum -y install ibus libevdev curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -68,7 +68,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo yum -y install qt$PLASMA_VER-qttools
         fi
 
-    elif [[ $(command -v zypper 2>/dev/null) ]]; then
+    elif command -v zypper >/dev/null 2>&1; then
         PACKAGE_MANAGER="zypper"
         sudo zypper --non-interactive install ibus libevdev2 curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -78,7 +78,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo zypper --non-interactive install qt$PLASMA_VER-tools-qdbus
         fi
 
-    elif [[ $(command -v xbps-install 2>/dev/null) ]]; then
+    elif command -v xbps-install >/dev/null 2>&1; then
         PACKAGE_MANAGER="xbps-install"
         sudo xbps-install -Suy ibus-devel libevdev-devel curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -88,7 +88,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo xbps-install -Suy qt$PLASMA_VER-tools
         fi
 
-    elif [[ $(command -v emerge 2>/dev/null) ]]; then
+    elif command -v emerge >/dev/null 2>&1; then
         PACKAGE_MANAGER="portage"
         sudo emerge app-i18n/ibus dev-libs/libevdev net-misc/curl x11-apps/xinput sys-apps/i2c-tools dev-lang/python dev-python/virtualenv dev-libs/libxml2 x11-libs/libxkbcommon sys-devel/gcc virtual/pkgconfig
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -98,7 +98,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo emerge dev-qt/qdbus
         fi
         
-    elif [[ $(command -v rpm-ostree 2>/dev/null) ]]; then
+    elif command -v rpm-ostree >/dev/null 2>&1; then
         PACKAGE_MANAGER="rpm-ostree"
         sudo rpm-ostree install xinput virtualenv python3-devel wayland-protocols-devel pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
@@ -108,7 +108,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo rpm-ostree install qt$PLASMA_VER-tools
         fi
 
-    elif [[ $(command -v eopkg 2>/dev/null) ]]; then
+    elif command -v eopkg >/dev/null 2>&1; then
         PACKAGE_MANAGER="eopkg"
         sudo eopkg install -y ibus libevdev curl xinput i2c-tools python3-devel python3-virtualenv libxml2-devel libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then

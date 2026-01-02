@@ -24,6 +24,9 @@ import ast
 from xkbcommon import xkb
 import signal
 import mmap
+import shutil
+
+QDBUS = shutil.which("qdbus") or shutil.which("qdbus6")
 
 # Logging setup
 logging.basicConfig(
@@ -430,7 +433,7 @@ def initialize_virtual_device():
 
 def get_window_kde_wayland_title(window_id):
     try:
-        cmd = ['qdbus', 'org.kde.KWin', f'/org/kde/KWin/Window/{window_id}', 'org.kde.KWin.Window.caption']
+        cmd = [QDBUS, 'org.kde.KWin', f'/org/kde/KWin/Window/{window_id}', 'org.kde.KWin.Window.caption']
         output = subprocess.check_output(cmd).decode().strip()
         return output
     except Exception as e:
@@ -444,7 +447,7 @@ def get_active_window_kde_wayland_title_using_qdbus():
         return None
 
     try:
-        cmd = ['qdbus', 'org.kde.KWin', '/KWin', 'org.kde.KWin.activeWindow']
+        cmd = [QDBUS, 'org.kde.KWin', '/KWin', 'org.kde.KWin.activeWindow']
         output = subprocess.check_output(cmd).decode().strip()
         match = re.search(r"(\d+)", output)
         if match:
@@ -694,7 +697,7 @@ def qdbusSet(cmd):
 
 def qdbusSetTouchpadEnabled(value):
     cmd = [
-        'qdbus',
+        QDBUS,
         'org.kde.KWin',
         f'/org/kde/KWin/InputDevice/event{touchpad}',
         'org.freedesktop.DBus.Properties.Set',

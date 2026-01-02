@@ -10,7 +10,7 @@ import Xlib.display
 import Xlib.X
 import Xlib.XK
 from xkbcommon import xkb
-from libevdev import EV_ABS, EV_KEY, EV_LED, EV_MSC, EV_SYN, Device, InputEvent, const, device
+from libevdev import EV_ABS, EV_KEY, EV_REL, EV_SYN, Device, InputEvent, device
 from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO, AsyncNotifier
 from periphery import I2C
 from typing import Optional
@@ -411,6 +411,9 @@ def initialize_virtual_device():
                         set_evdev_key_for_char(field, '')
                     if isEvent(field):
                         enable_key(field)
+                    elif isEventList(field):
+                        for key in field:
+                            enable_key(key)
 
                     # Also enable any modifiers defined in the shortcut
                     if "modifier" in config:
@@ -528,6 +531,11 @@ def emulate_shortcuts(touch_input, event_code, active_modifiers, duration_held=0
 
     for shortcut in prioritized_shortcuts:
         key_code = shortcut["key"]
+        key_value = None
+        try:
+            key_value = shortcut["value"]
+        except:
+            pass
         trigger_mode = shortcut.get("trigger", "release")
         modifier = shortcut.get("modifier")
         required_duration = shortcut.get("duration", 0)  # Default to 0 (immediate)
@@ -535,24 +543,21 @@ def emulate_shortcuts(touch_input, event_code, active_modifiers, duration_held=0
         # Ensure correct modifiers
         if (modifier and modifier in active_modifiers) or (not modifier and not active_modifiers):
             if duration_held >= required_duration:
-                if trigger_mode == "immediate" and event_code:
-                    send_key_event(key_code, press=True)
-                    send_key_event(key_code, press=False)
-                elif trigger_mode == "release" and not event_code:
-                    send_key_event(key_code, press=True)
-                    send_key_event(key_code, press=False)
+                if (trigger_mode == "immediate" and event_code) or\
+                    (trigger_mode == "release" and not event_code):
+                    send_key_event(key_code, key_value)
 
-                log.info(f"Executed shortcut: {key_code.name} with modifier {modifier} (Held for {duration_held:.2f}s)")
+                log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
                 return  # Stop after first valid shortcut
             else:
                 #log.info(trigger_mode)
                 #log.info(event_code)
                 if (trigger_mode == "immediate" and not event_code) or (trigger_mode == "release" and not event_code):
-                    log.info(f"Shortcut {key_code.name} requires {required_duration}s, but was held for {duration_held:.2f}s")
+                    log.info(f"Shortcut {key_code} with value {key_value} requires {required_duration}s, but was held for {duration_held:.2f}s")
 
     #log.info(f"No valid shortcut mapped for touch input: {touch_input} with modifiers {active_modifiers}")
 
-def send_key_event(key_code, press=True):
+def send_key_event(key_code, key_value):
     global uinput_device
 
     if not uinput_device:
@@ -560,12 +565,25 @@ def send_key_event(key_code, press=True):
         return
 
     try:
-        event_value = 1 if press else 0  # 1 for key press, 0 for key release
-        uinput_device.send_events([
-            InputEvent(key_code, event_value),
-            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
-        ])
-        log.info(f"Sent key {'press' if press else 'release'} event: {key_code.name}")
+        if isinstance(key_code, list):
+            for c, v in zip(key_code, key_value):
+                if c.type == EV_REL:
+                    uinput_device.send_events([
+                        InputEvent(c, v),
+                        InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                    ])
+        else:
+            uinput_device.send_events([
+                InputEvent(key_code, 1),
+                InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+            ])
+            uinput_device.send_events([
+                InputEvent(key_code, 0),
+                InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+         ])
+
+        log.info(f"Sent key {key_code, key_value}")
+
     except Exception as e:
         log.error(f"Error sending key event: {e}")
 
@@ -1289,7 +1307,7 @@ watch_manager = None
 event_notifier = None
 
 def isEvent(event):
-    if hasattr(event, "name") and hasattr(EV_KEY, event.name):
+    if hasattr(event, "name") and (hasattr(EV_KEY, event.name) or hasattr(EV_REL, event.name)):
         return True
     else:
         return False

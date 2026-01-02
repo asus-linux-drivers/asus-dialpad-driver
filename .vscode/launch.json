@@ -13,7 +13,7 @@
             "justMyCode": false,
             "args": ["proartp16"],
             "env": {
-              "LOG": "INFO"
+              "LOG": "DEBUG"
             }
         }
     ]

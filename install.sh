@@ -19,12 +19,23 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
 
 
 {
+    # determine plasma version
+    # https://github.com/asus-linux-drivers/asus-numberpad-driver/pull/255
+    if command -v kinfo >/dev/null 2>&1; then
+        PLASMA_VER=$(kinfo 2>/dev/null | awk -F': ' '/KDE Plasma Version/ {print $2}' | cut -d. -f1)
+    else
+        PLASMA_VER=6  # default to plasma 6 for modern systems
+    fi
+
     # pip pywayland requires gcc
     if [[ $(command -v apt-get 2>/dev/null) ]]; then
         PACKAGE_MANAGER="apt"
         sudo apt-get -y install ibus libevdev2 curl xinput i2c-tools python3-dev python3-virtualenv libxml2-utils libxkbcommon-dev gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo apt-get -y install libwayland-dev
+        fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo apt-get -y install qdbus-qt$PLASMA_VER
         fi
 
     elif [[ $(command -v pacman 2>/dev/null) ]]; then
@@ -33,12 +44,18 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo pacman --noconfirm --needed -S wayland
         fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo pacman --noconfirm --needed -S qt$PLASMA_VER-tools
+        fi
 
     elif [[ $(command -v dnf 2>/dev/null) ]]; then
         PACKAGE_MANAGER="dnf"
         sudo dnf -y install ibus libevdev curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo dnf -y install wayland-devel
+        fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo dnf -y install qt$PLASMA_VER-qttools
         fi
 
     elif [[ $(command -v yum 2>/dev/null) ]]; then
@@ -47,12 +64,18 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo yum -y install wayland-devel
         fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo yum -y install qt$PLASMA_VER-qttools
+        fi
 
     elif [[ $(command -v zypper 2>/dev/null) ]]; then
         PACKAGE_MANAGER="zypper"
         sudo zypper --non-interactive install ibus libevdev2 curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo zypper --non-interactive install wayland-devel
+        fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo zypper --non-interactive install qt$PLASMA_VER-tools-qdbus
         fi
 
     elif [[ $(command -v xbps-install 2>/dev/null) ]]; then
@@ -61,6 +84,9 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo xbps-install -Suy wayland-devel
         fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo xbps-install -Suy qt$PLASMA_VER-tools
+        fi
 
     elif [[ $(command -v emerge 2>/dev/null) ]]; then
         PACKAGE_MANAGER="portage"
@@ -68,12 +94,18 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo emerge dev-libs/wayland
         fi
-
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo emerge dev-qt/qdbus
+        fi
+        
     elif [[ $(command -v rpm-ostree 2>/dev/null) ]]; then
         PACKAGE_MANAGER="rpm-ostree"
         sudo rpm-ostree install xinput virtualenv python3-devel wayland-protocols-devel pkg-config
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo rpm-ostree install wayland-devel
+        fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo rpm-ostree install qt$PLASMA_VER-tools
         fi
 
     elif [[ $(command -v eopkg 2>/dev/null) ]]; then
@@ -82,9 +114,12 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo eopkg install -y wayland-devel
         fi
+        if [[ "$DESKTOP_SESSION" == plasma* ]]; then
+            sudo eopkg install -y qt$PLASMA_VER-tools
+        fi
 
     else
-        echo "Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
+        echo "Warning: Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
     fi
 
     echo

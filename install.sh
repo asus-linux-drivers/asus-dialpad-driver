@@ -122,6 +122,14 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         echo "Warning: Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
     fi
 
+    if [[ $? != 0 ]]; then
+        echo "Error: Something went wrong during installing packages"
+        source install_begin_send_anonymous_report.sh
+        exit 1
+    else
+        source install_begin_send_anonymous_report.sh
+    fi
+
     echo
 
     source install_user_groups.sh

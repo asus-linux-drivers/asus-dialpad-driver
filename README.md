@@ -3,7 +3,7 @@
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 ![Maintainer](https://img.shields.io/badge/maintainer-ldrahnik-blue)
 [![GitHub Release](https://img.shields.io/github/release/asus-linux-drivers/asus-dialpad-driver.svg?style=flat)](https://github.com/asus-linux-drivers/asus-dialpad-driver/releases)
-[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v1.2.0.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
+[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v1.3.0.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
 [![GitHub issues-closed](https://img.shields.io/github/issues-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/issues?q=is%3Aissue+is%3Aclosed)
 [![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/compare)
 [![Ask Me Anything !](https://img.shields.io/badge/Ask%20about-anything-1abc9c.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/new/choose)
@@ -26,6 +26,25 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 
 [FAQ](#faq)
 
+## Features
+
+- Driver during installation collects anonymous data with goal improve driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/s/gaK2TftgZqM), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
+- Driver (including backlighting if hardware supported) installed for the current user
+- Driver creates own virtual environment of currently installed version of `Python3`
+- Multiple pre-created [DialPad layouts](https://github.com/asus-linux-drivers/asus-dialpad-driver#layouts) with the possibility of [creating custom layouts or improving existing ones (circle_diameter, center_button_diameter, circle_center_x..)](https://github.com/asus-linux-drivers/asus-dialpad-driver#keyboard-layout)
+- Customization through 2-way sync [configuration file](https://github.com/asus-linux-drivers/asus-dialpad-driver#configuration-file) (when `$ bash ./install.sh` is run, changes previously made in the config file will not be overwritten without user permission, similarly when `$ bash ./uninstall.sh` is run the config file will be kept. In either case, when the config file or parts of it do not exist they will be automatically created or completed with default values)
+- Automatic DialPad layout detection
+- Activation/deactivation of DialPad by pressing and holding the top-right icon (activation time by default is 1s)
+- Optional co-activator key requirement (`Shift`, `Control`, `Alt`) to prevent accidental DialPad activation
+- Recognize of currently focused app by part of title (during finding the first matched shortcut wins: `visual studio code` defined after `code` will be never be matched)
+- Adding events for `clockwise`, `counterclockwise` or `center` button, the circle is delimted to slices according to config value `slices_count` (by default 4)
+- Adding event key `EV_KEY` with press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
+- Adding arrays of single-event `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` with values: `-1, -120`)
+- Possibility to trigger both types `EV_REL` and `EV_KEY` on release or immediately
+- Possibility to require co-activator keys (`EV_KEY.KEY_LEFTSHIFT`) for both types `EV_KEY` and `EV_REL` which makes possible to distinguish between multiple functions for each app
+- Possibility to temporary force using not app specific shortcut only without removing app specific shortcuts from layout (`config_supress_app_specifics_shortcuts`)
+- Disabling the Touchpad (e.g. Fn+special key) disables by default the NumberPad as well (can be disabled)
+
 ## Data collecting
 
 - Driver during installation collects anonymously data with goal improve the driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/reporting/a9ed8ed9-a0d7-42bd-96e9-57daed8697b1), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
@@ -39,7 +58,7 @@ $ git clone https://github.com/asus-linux-drivers/asus-dialpad-driver
 $ cd asus-dialpad-driver
 # now you are using master branch with the latest changes which may be not stable
 # jump to the latest release of stable version:
-$ git checkout v1.2.0
+$ git checkout v1.3.0
 ```
 
 or customized install:
@@ -240,7 +259,8 @@ During the install process `bash ./install.sh`, you're required to select your k
 ...
 1) asusvivobook16x.py
 2) proartp16.py
-9) Quit
+3) zenbookpro14.py
+4) Quit
 Please enter your choice
 ...
 ```

@@ -13,6 +13,7 @@ INSTALL_DURATION=$(($END_TIME - $START_TIME))
 # $SUGGESTED_LAYOUT
 # $LAYOUT_NAME
 # $SERVICE
+# $COACTIVATOR_KEY
 # $LAYOUT_AUTO_SUGGESTION
 # $LAYOUT_AUTO_SUGGESTED_DIFFER_FROM_USED
 # $LAYOUT_AUTO_SUGGESTION_ONLINE
@@ -40,6 +41,7 @@ CURL_PAYLOAD='{
                 "layout_recommended_but_installed_another": "'${LAYOUT_AUTO_SUGGESTED_DIFFER_FROM_USED}'",
                 "layout": "'${LAYOUT_NAME}'",
                 "systemctl_service_installed": "'${SERVICE}'",
+                "coactivator_key": "'${COACTIVATOR_KEY}'",
                 "install_duration_seconds": "'${INSTALL_DURATION}'",
                 "touchpad": "'${TOUCHPAD}'",
                 "laptop": "'${LAPTOP}'",

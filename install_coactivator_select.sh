@@ -20,7 +20,7 @@ echo
 echo "Co-activator key for DialPad activation"
 echo
 echo "A co-activator key requires you to hold a modifier key while touching"
-echo "the Num_Lock area to activate the DialPad. This helps"
+echo "the top right icon to activate the DialPad. This helps"
 echo "prevent accidental activation during touchpad use."
 echo
 echo "Select co-activator key:"

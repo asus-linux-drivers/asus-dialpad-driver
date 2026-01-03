@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0 (3.1.2026)
+
+### Fixed
+
+- Detection of plasma environment (e.g. `plasmawayland` or `plasma-x11`)
+- Missing support for `qdbus6`
+- Plasma version detection using `kinfo`
+- Running not under systemd service (when optional `systemd-python` pip package is not installed)
+- When xauthority has in `tmp` folder multiple files
+- Missing auto-installation of `qdbus` in supported distributions when using KDE Plasma
+
+### Feature
+
+- Co-activator key selection for DialPad activation
+- By default NumberPad automatically disable after 2 mins
+- Support for `EV_REL` events with single event (opposite to release/press)
+- Support for list of keys
+- Example of scrolling
+
 ## 1.2.0 (16.12.2025)
 
 ### Fixed

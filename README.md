@@ -30,16 +30,6 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 
 - Driver during installation collects anonymously data with goal improve the driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/reporting/a9ed8ed9-a0d7-42bd-96e9-57daed8697b1), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
 
-## Requirements
-
-- for new KDE with no `qdbus` but with `qdbus6`
-
-```
-$ git clone https://github.com/jinliu/kdotool
-$ cd kdotool
-$ cargo build # and make binary target/debug/kdotool globally available
-```
-
 ## Installation
 
 Get the latest dev version using `git`:

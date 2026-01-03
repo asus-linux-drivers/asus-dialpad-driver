@@ -25,6 +25,8 @@ from xkbcommon import xkb
 import signal
 import mmap
 import shutil
+import xcffib
+import xcffib.xkb
 import glob
 
 SYSTEMD_JOURNAL_AVAILABLE = False
@@ -59,19 +61,31 @@ if not xdg_session_type:
 
 # Setup display for X11
 display = None
+xkb_conn = None
 display_var = None
 display_wayland = None
+keyboard_state = None
 display_wayland_var = None
 keymap_loaded = False
 listening_touchpad_events_started = False
 active_modifiers = set()
 modifiers = set()
+activation_lock = threading.Lock()
 
 if xdg_session_type == "x11":
     try:
         display_var = os.environ.get('DISPLAY')
         display = Xlib.display.Display(display_var)
-        log.info("X11 session detected and connected.")
+        log.info("X11 detected and connected succesfully to the display {}".format(display_var))
+        xkb_conn = xcffib.connect()
+        xkb_ext = xkb_conn(xcffib.xkb.key)
+        xkb_ext.UseExtension(
+            xcffib.xkb.MAJOR_VERSION,
+            xcffib.xkb.MINOR_VERSION
+        ).reply()
+
+        xkb_conn_setup = xkb_conn.get_setup()
+        log.info("X11 detected and connected succesfully to the xcffib")
     except Exception as e:
         log.error(f"Failed to connect to X11 display: {e}")
         sys.exit(1)
@@ -252,6 +266,8 @@ CONFIG_ACTIVATION_TIME = "activation_time"
 CONFIG_ACTIVATION_TIME_DEFAULT = True
 CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS = "config_supress_app_specifics_shortcuts"
 CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT = False
+CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY = "top_right_icon_coactivator_key"
+CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT = ""  # Empty means no co-activator required
 
 config_file_path = config_file_dir + CONFIG_FILE_NAME
 config = configparser.ConfigParser()
@@ -347,6 +363,7 @@ def load_all_config_values():
     global config_lock
     global slices_count
     global suppress_app_specifics_shortcuts
+    global coactivator_keys
 
     #log.debug("load_all_config_values: config_lock.acquire will be called")
     config_lock.acquire()
@@ -360,6 +377,7 @@ def load_all_config_values():
     enabled = config_get(CONFIG_ENABLED, CONFIG_ENABLED_DEFAULT)
     slices_count = int(config_get(CONFIG_SLICES_COUNT, CONFIG_SLICES_COUNT_DEFAULT))
     suppress_app_specifics_shortcuts = int(config_get(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS, CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT))
+    coactivator_keys = config_get(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY, CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT).strip().split()
 
     config_lock.release()
 
@@ -778,11 +796,60 @@ def set_touchpad_prop_send_events(value):
     except:
         synclient_status_failure_count+=1
 
+
+def are_modifier_keys_pressed(modifier_names):
+
+    global display, keyboard_state, xkb_conn
+    
+    if not modifier_names:
+        return True
+
+    # wayland
+    if keyboard_state:
+        try:
+            for modifier_name in modifier_names:
+                #modifier_keysym = mod_name_to_specific_keysym_name(modifier_name)  
+                idx = keyboard_state.keymap.mod_get_index(modifier_name)
+                if idx >= 0 and not keyboard_state.mod_index_is_active(idx, xkb.StateComponent.XKB_STATE_MODS_DEPRESSED):
+                    log.debug("Modifier %s not pressed (wayland xkb)", modifier_name)
+                    return False
+        except Exception:
+            pass
+
+    # x11
+    if xkb_conn:
+
+        X11_MODIFIER_INDEX = {
+            "Shift": 0,
+            "Control": 2,
+            "Alt": 3
+        }
+
+        try:
+            reply = xkb_conn(xcffib.xkb.key).GetState(
+                xcffib.xkb.ID.UseCoreKbd
+            ).reply()
+
+            active_mods = reply.mods
+
+            for modifier_name in modifier_names:
+                idx = X11_MODIFIER_INDEX.get(modifier_name)
+                if idx is not None and not (active_mods & (1 << idx)):
+                    log.debug("Modifier %s not pressed (xcffib)", modifier_name)
+                    return False
+
+        except Exception as e:
+            log.exception(f"Failed to get X11 modifier state via XKB: {e}")
+
+    log.debug("All modifier keys pressed: %s", modifier_names)
+
+    return True
+
 # Store key press start times
 key_press_times = {}
 
 def listen_touchpad_events():
-    global slices_count, activation_time, last_event_time, dialpad, active_modifiers
+    global slices_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys
 
     try:
 
@@ -809,6 +876,7 @@ def listen_touchpad_events():
             last_slice = None  # Track the last active slice in the circle
             center_button_triggered = False
             tap_disabled = False  # Track tap-to-click status
+            coactivator_blocked = False
 
             for event in d_t.events():
 
@@ -819,6 +887,7 @@ def listen_touchpad_events():
                     if event.value == 1:  # Finger down
                         key_press_times[event.code] = time()
                         finger_detected = True
+                        coactivator_blocked = False
                         touch_start_time = time()  # Record the touch start time
                         within_top_right_icon = False  # Reset the flag
                         icon_activated = False  # Reset activation status
@@ -858,12 +927,15 @@ def listen_touchpad_events():
                         within_top_right_icon = True  # Mark that the touch is inside the bounds
 
                         # Check if the touch duration exceeds the threshold and hasn't been activated yet
-                        if touch_start_time and not icon_activated:
+                        if touch_start_time and not icon_activated and not coactivator_blocked:
                             if (time() - touch_start_time) >= activation_time:
-                                log.info("Top-right icon held for the required duration.")
-                                # Toggle the top-right icon state
-                                toggle_top_right_icon(dialpad)
-                                icon_activated = True  # Mark that the icon has been activated
+
+                                if dialpad or (not dialpad and are_modifier_keys_pressed(coactivator_keys)):
+                                    toggle_top_right_icon(dialpad)
+                                    icon_activated = True
+                                else:
+                                    log.debug("DialPad activation blocked: co-activator key(s) not pressed: %s", " ".join(coactivator_keys))
+                                    coactivator_blocked = True
                     else:
                         if within_top_right_icon:
                             log.debug("Touch left top-right icon bounds. Canceling the action.")
@@ -1287,7 +1359,7 @@ def check_gnome_layout():
 
 
 def cleanup():
-    global dialpad, display, display_wayland, stop_threads, event_notifier
+    global dialpad, display, display_wayland, stop_threads, event_notifier, watch_manager, xkb_conn
 
     log.info("Clean up started")
 
@@ -1302,6 +1374,8 @@ def cleanup():
         # then clean up
         stop_threads=True
 
+        fd_t.close()
+
         if display_wayland:
             display_wayland.disconnect()
 
@@ -1311,6 +1385,12 @@ def cleanup():
             # because may be already closed (e.g. closed connection by server in load_keymap_listener_x11)
             except:
                 pass
+
+        try:
+            if xkb_conn is not None:
+                xkb_conn.disconnect()
+        except Exception:
+            pass
 
         if watch_manager:
             watch_manager.close()

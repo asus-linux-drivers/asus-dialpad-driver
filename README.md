@@ -263,6 +263,28 @@ Please enter your choice
 | **Associated apps**                                |          |          |
 | `app_shortcuts`                                        | Optional | Yes                  | | required format like in `default` layout
 
+### Co-activator keys
+
+To prevent accidental DialPad activation while using the touchpad, you can configure a co-activator key. This requires holding a modifier key like `Alt` while touching the top right icon to activate the DialPad.
+
+During installation, you will be prompted to select a co-activator key:
+
+```
+Select co-activator key:
+1) None
+2) Shift
+3) Control
+4) Alt
+6) Quit
+```
+
+The co-activator is configured by modifying the `top_right_icon_coactivator_key` in your config file. When a co-activator is set, the `top_right_icon_coactivator_key` value becomes:
+
+```
+...
+top_right_icon_coactivator_key = Alt
+```
+
 ### Configuration file
 
 Attributes which do not depend on a specific DialPad keyboard can be changed according to the table below in the config `dialpad_dev` in the installed driver location `/usr/share/asus-dialpad-driver`. See the example below showing the default attibutes:
@@ -273,6 +295,7 @@ disable_due_inactivity_time = 0
 touchpad_disables_dialpad = 1
 activation_time = 1
 enabled = 0
+top_right_icon_coactivator_key = Alt
 ```
 
 | Option                                        | Required | Default           | Description |
@@ -286,6 +309,7 @@ enabled = 0
 | `suppress_app_specifics_shortcuts`              |          | `0`             | app specific shortcuts are ignored when is specific window with app opened
 | **Top right icon**                            |          |                   |
 | `activation_time`              |          | `1.0` [seconds]             | amount of time you have to hold `top_right_icon`
+| `top_right_icon_coactivator_key`                     |          | ``            | empty default means no co-activator keys are required (valid values are `Shift`, `Control` or `Alt` delimeted by space)<br><br>this works only for activation by touching the top right icon
 
 ## Similar existing
 

@@ -36,7 +36,7 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 - Automatic DialPad layout detection
 - Activation/deactivation of DialPad by pressing and holding the top-right icon (activation time by default is 1s)
 - Optional co-activator key requirement (`Shift`, `Control`, `Alt`) to prevent accidental DialPad activation
-- Recognize of currently focused app by part of title (during finding the first matched shortcut wins: `visual studio code` defined after `code` will be never be matched)
+- Recognize of currently focused app by binary path (e.g. `/usr/share/code/code`) or part of the title (during finding the first matched shortcut wins: `visual studio code` defined after `code` will be never be matched)
 - Adding events for `clockwise`, `counterclockwise` or `center` button, the circle is delimted to slices according to config value `slices_count` (by default 4)
 - Adding event key `EV_KEY` with press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
 - Adding arrays of single-event `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` with values: `-1, -120`)

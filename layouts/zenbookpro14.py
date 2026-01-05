@@ -9,9 +9,9 @@ circle_center_x = 586
 circle_center_y = 573
 
 app_shortcuts = {
-    "code": {
+    "/usr/share/code/code": {
         "center": [
-          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1},
+          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1, "modifier": EV_KEY.KEY_LEFTSHIFT}
         ],
         "clockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate"},
@@ -24,7 +24,7 @@ app_shortcuts = {
     },
     "firefox": {
         "center": [
-          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1},
+          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1, "modifier": EV_KEY.KEY_LEFTSHIFT}
         ],
         "clockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate"},
@@ -37,7 +37,7 @@ app_shortcuts = {
     },
     "none": {
         "center": [
-          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1},
+          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1, "modifier": EV_KEY.KEY_LEFTSHIFT}
         ],
         "clockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate"},

@@ -168,9 +168,9 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
     CONFIG_FILE_PATH="$CONFIG_FILE_DIR_PATH/$CONFIG_FILE_NAME"
 
     sudo mkdir -p "$INSTALL_DIR_PATH/layouts"
-    sudo chown -R $USER "$INSTALL_DIR_PATH"
     sudo install dialpad.py "$INSTALL_DIR_PATH"
     sudo install -t "$INSTALL_DIR_PATH/layouts" layouts/*.py
+    sudo chown -R $USER "$INSTALL_DIR_PATH"
 
     if [[ -f "$CONFIG_FILE_PATH" ]]; then
         read -r -p "In system remains config file from previous installation. Do you want replace that config with default config? [y/N]" RESPONSE
@@ -235,6 +235,10 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
     fi
 
     source install_coactivator_select.sh
+
+    echo
+
+    source install_user_interface.sh
 
     echo
 

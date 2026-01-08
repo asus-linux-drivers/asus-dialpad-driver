@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0 (TODO:)
+
+### Fixed
+
+- Changed location of service to `$HOME/.config/systemd/user` (credits @s-badran)
+- Fixed co-activator key selection for DialPad activation
+
+### Feature
+
+- Init of User Interface
+
 ## 1.3.0 (3.1.2026)
 
 ### Fixed
@@ -14,7 +25,7 @@
 ### Feature
 
 - Co-activator key selection for DialPad activation
-- By default NumberPad automatically disable after 2 mins
+- By default DialPad automatically disable after 2 mins
 - Support for `EV_REL` events with single event (opposite to release/press)
 - Support for list of keys
 - Example of scrolling
@@ -26,7 +37,7 @@
 - The package `smbus2` was replaced by `python-periphery` because has missing support for `python3.14` (yet) and `i2ctransfer` was added as alternative for `i2c` communication
 - Nix `system` has been changed to `stdenv.hostPlatform.system` (credits @SamueleFacenda)
 - Sending driver's version to GA
-- `uinput`, `i2c`, `input` changed to a system groups (@vitaminace33)
+- `uinput`, `i2c`, `input` changed to a system groups (credits @vitaminace33)
 - Setting up appropriate (not a static) `KERNEL` and `SUBSYSTEM` for `i2c` and `uinput` udev rules
 
 ### Feature

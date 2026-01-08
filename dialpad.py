@@ -28,6 +28,22 @@ import shutil
 import xcffib
 import xcffib.xkb
 import glob
+import socket
+import json
+
+SOCKET_PATH = "/tmp/dialpad.sock"
+sock = None
+
+def init_socket():
+    global sock
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        log.info("DialPad socket initialized at %s", SOCKET_PATH)
+
+    except Exception as e:
+        log.error("Failed to initialize socket: %s", e)
+        sock = None
 
 SYSTEMD_JOURNAL_AVAILABLE = False
 try:
@@ -108,7 +124,14 @@ if len(sys.argv) > 1:
 try:
     model_layout = importlib.import_module('layouts.' + model)
 except:
-    log.error("DialPad layout *.py from dir layouts is required as first argument. Re-run install script or add missing first argument (valid value is default).")
+    layouts_dir = "layouts"
+    available_layouts = [os.path.splitext(f)[0] for f in os.listdir(layouts_dir) if f.endswith(".py")]
+
+    log.error(
+        f"DialPad layout *.py from dir '{layouts_dir}' is required as first argument. "
+        f"Re-run install script or add missing first argument. "
+        f"Available layouts: {', '.join(available_layouts)}"
+    )
     sys.exit(1)
 
 # Config file dir
@@ -255,6 +278,8 @@ uinput_device = None
 CONFIG_FILE_NAME = "dialpad_dev"
 CONFIG_SECTION = "main"
 CONFIG_ENABLED = "enabled"
+CONFIG_SOCKET_ENABLED = "socket_enabled"
+CONFIG_SOCKET_ENABLED_DEFAULT = True
 CONFIG_ENABLED_DEFAULT = False
 CONFIG_SLICES_COUNT = "slices_count"
 CONFIG_SLICES_COUNT_DEFAULT = 4
@@ -285,6 +310,24 @@ min_y, max_y = abs_y.minimum, abs_y.maximum
 log.info('Touchpad min-max: x %d-%d, y %d-%d', min_x, max_x, min_y, max_y)
 
 last_event_time = 0
+
+def send_to_socket(event: str, payload: dict):
+    if not sock:
+        return
+
+    msg = {
+        "ts": time(),
+        "event": event,
+        **payload
+    }
+
+    try:
+        sock.sendto(
+            (json.dumps(msg) + "\n").encode("utf-8"),
+            SOCKET_PATH
+        )
+    except Exception:
+        pass
 
 def parse_value_from_config(value):
     if value == '0':
@@ -355,6 +398,10 @@ def read_config_file():
     except:
         pass
 
+def is_multifunction(app_config):
+    standard_keys = {"center", "clockwise", "counterclockwise"}
+    return not standard_keys.issuperset(app_config.keys())
+
 def load_all_config_values():
     global config
     global disable_due_inactivity_time
@@ -364,6 +411,7 @@ def load_all_config_values():
     global slices_count
     global suppress_app_specifics_shortcuts
     global coactivator_keys
+    global socket_enabled
 
     #log.debug("load_all_config_values: config_lock.acquire will be called")
     config_lock.acquire()
@@ -378,6 +426,7 @@ def load_all_config_values():
     slices_count = int(config_get(CONFIG_SLICES_COUNT, CONFIG_SLICES_COUNT_DEFAULT))
     suppress_app_specifics_shortcuts = int(config_get(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS, CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT))
     coactivator_keys = config_get(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY, CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT).strip().split()
+    socket_enabled = config_get(CONFIG_SOCKET_ENABLED, CONFIG_SOCKET_ENABLED_DEFAULT)
 
     config_lock.release()
 
@@ -442,7 +491,9 @@ def initialize_virtual_device():
                     configs = [configs]  # Ensure consistency with list-based structure
 
                 for config in configs:
-                    field = config["key"]
+                    field = config.get("key")
+                    if field is None:
+                        continue
 
                     if not isEvent(field) and not isEventList(field):
                         set_evdev_key_for_char(field, '')
@@ -453,8 +504,8 @@ def initialize_virtual_device():
                             enable_key(key)
 
                     # Also enable any modifiers defined in the shortcut
-                    if "modifier" in config:
-                        modifier = config["modifier"]
+                    modifier = config.get("modifier")
+                    if modifier is not None:
                         modifiers.add(modifier)
 
         # Create the uinput device
@@ -490,21 +541,6 @@ def get_active_window_kde_wayland_title_using_qdbus():
     except Exception as e:
         qdbus_failure_count += 1
         log.error("QDbus KDE title fetch failed (%d/%d): %s", qdbus_failure_count, qdbus_max_failure_count, e)
-        return None
-
-def get_active_window_kde_wayland_title_using_kdotool():
-    global kdotool_failure_count, kdotool_max_failure_count
-
-    if kdotool_failure_count >= kdotool_max_failure_count:
-        return None
-
-    try:
-        window_uuid = subprocess.check_output(['kdotool', 'getactivename']).decode().strip()
-        title = subprocess.check_output(['kdotool', 'getwindowname', window_uuid]).decode().strip()
-        return title
-    except Exception as e:
-        kdotool_failure_count += 1
-        log.error("Kdotool title fetch failed (%d/%d): %s", kdotool_failure_count, kdotool_max_failure_count, e)
         return None
 
 def get_active_window_gnome_wayland_title():
@@ -621,41 +657,49 @@ def emulate_shortcuts(touch_input, event_code, active_modifiers, duration_held=0
         )
     if not app_name:
         app_name = next((app for app in app_shortcuts if app in window_title.lower()), None) if window_title else None
+    if not app_name:
+        app_name = "none"
     shortcuts = app_shortcuts.get(app_name, app_shortcuts["none"])
 
-    matched_shortcuts = shortcuts.get(touch_input, [])
-    if not isinstance(matched_shortcuts, list):
-        matched_shortcuts = [matched_shortcuts]
+    if not is_multifunction(app_shortcuts[app_name]):
 
-    prioritized_shortcuts = sorted(matched_shortcuts, key=lambda s: "modifier" not in s)
+        matched_shortcuts = shortcuts.get(touch_input, [])
+        if not isinstance(matched_shortcuts, list):
+            matched_shortcuts = [matched_shortcuts]
 
-    for shortcut in prioritized_shortcuts:
-        key_code = shortcut["key"]
-        key_value = None
-        try:
-            key_value = shortcut["value"]
-        except:
-            pass
-        trigger_mode = shortcut.get("trigger", "release")
-        modifier = shortcut.get("modifier")
-        required_duration = shortcut.get("duration", 0)  # Default to 0 (immediate)
+        prioritized_shortcuts = sorted(matched_shortcuts, key=lambda s: "modifier" not in s)
 
-        # Ensure correct modifiers
-        if (modifier and modifier in active_modifiers) or (not modifier and not active_modifiers):
-            if duration_held >= required_duration:
-                if (trigger_mode == "immediate" and event_code) or\
-                    (trigger_mode == "release" and not event_code):
-                    send_key_event(key_code, key_value)
+        for shortcut in prioritized_shortcuts:
+            key_code = shortcut["key"]
+            key_value = None
+            try:
+                key_value = shortcut["value"]
+            except:
+                pass
+            trigger_mode = shortcut.get("trigger", "release")
+            modifier = shortcut.get("modifier")
+            required_duration = shortcut.get("duration", 0)  # Default to 0 (immediate)
 
-                log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
-                return  # Stop after first valid shortcut
-            else:
-                #log.info(trigger_mode)
-                #log.info(event_code)
-                if (trigger_mode == "immediate" and not event_code) or (trigger_mode == "release" and not event_code):
-                    log.info(f"Shortcut {key_code} with value {key_value} requires {required_duration}s, but was held for {duration_held:.2f}s")
+            # Ensure correct modifiers
+            if (modifier and modifier in active_modifiers) or (not modifier and not active_modifiers):
+                if duration_held >= required_duration:
+                    if (trigger_mode == "immediate" and event_code) or\
+                        (trigger_mode == "release" and not event_code):
+                        send_key_event(key_code, key_value)
 
+                    log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
+                    return shortcut # Stop after first valid shortcut
+                else:
+                    #log.info(trigger_mode)
+                    #log.info(event_code)
+                    if (trigger_mode == "immediate" and not event_code) or (trigger_mode == "release" and not event_code):
+                        log.info(f"Shortcut {key_code} with value {key_value} requires {required_duration}s, but was held for {duration_held:.2f}s")
+    else:
+        log.debug("Multifunction mode not implemented yet.")
+
+    return None
     #log.info(f"No valid shortcut mapped for touch input: {touch_input} with modifiers {active_modifiers}")
+
 
 def send_key_event(key_code, key_value):
     global uinput_device
@@ -699,6 +743,9 @@ def activate_dialpad():
 
     dialpad = True
 
+    if socket_enabled:
+        send_to_socket("dialpad", {CONFIG_ENABLED: dialpad})
+
 def deactivate_dialpad():
     global dialpad
 
@@ -710,6 +757,9 @@ def deactivate_dialpad():
     config_set(CONFIG_ENABLED, False)
 
     dialpad = False
+
+    if socket_enabled:
+        send_to_socket("dialpad", {CONFIG_ENABLED: dialpad})
 
 # Function to enable/disable the DialPad
 def toggle_top_right_icon(current_state_is_enabled):
@@ -768,9 +818,6 @@ gsettings_max_failure_count = 1
 qdbus_failure_count = 0
 qdbus_max_failure_count = 1
 
-kdotool_failure_count = 0
-kdotool_max_failure_count = 1
-
 gnome_failure_count = 0
 gnome_max_failure_count = 1
 
@@ -781,16 +828,12 @@ synclient_status_failure_count = 0
 synclient_status_max_failure_count = 1
 
 def qdbusSet(cmd):
-    global qdbus_failure_count, qdbus_max_failure_count, touchpad
+    global qdbus_failure_count
 
-    if qdbus_failure_count < qdbus_max_failure_count:
-        try:
-            subprocess.call(cmd)
-        except Exception as e:
-            log.debug(e, exc_info=True)
-            qdbus_failure_count+=1
-    else:
-        log.debug('Qdbus failed more than: "%s" so is not trying anymore', qdbus_max_failure_count)
+    ret = subprocess.call(cmd)
+
+    if ret != 0:
+        qdbus_failure_count += 1
 
 def qdbusSetTouchpadEnabled(value):
     cmd = [
@@ -816,7 +859,9 @@ def gsettingsSet(path, name, value):
                 cmd = ['gsettings', 'set', path, name, str(value)]
 
             log.debug(cmd)
-            subprocess.call(cmd)
+            ret = subprocess.call(cmd)
+            if ret != 0:
+                raise subprocess.CalledProcessError(ret, cmd)
         except Exception as e:
             log.debug(e, exc_info=True)
             gsettings_failure_count+=1
@@ -834,6 +879,8 @@ def set_touchpad_prop_send_events(value):
         gsettingsSetTouchpadSendEvents(value)
     if qdbus_failure_count < qdbus_max_failure_count:
         qdbusSetTouchpadEnabled(value)
+    else:
+        log.debug('Qdbus failed more than: "%s" so is not trying anymore', qdbus_max_failure_count)
 
     # 2. priority - xinput
     if xinput_failure_count > xinput_max_failure_count:
@@ -843,6 +890,9 @@ def set_touchpad_prop_send_events(value):
             cmd = ["xinput", "enable" if value else "disable", touchpad_name]
             log.debug(cmd)
             subprocess.call(cmd)
+            ret = subprocess.call(cmd)
+            if ret != 0:
+                raise subprocess.CalledProcessError(ret, cmd)
             return
         except:
             xinput_failure_count+=1
@@ -855,6 +905,9 @@ def set_touchpad_prop_send_events(value):
         cmd = ["synclient", "TouchpadOff=" + str(value)]
         log.debug(cmd)
         subprocess.call(cmd)
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            raise subprocess.CalledProcessError(ret, cmd)
         return
     except:
         synclient_status_failure_count+=1
@@ -911,6 +964,26 @@ def are_modifier_keys_pressed(modifier_names):
 # Store key press start times
 key_press_times = {}
 
+import subprocess
+
+def get_current_value(shortcut_entry):
+    """
+    Vrátí aktuální hodnotu pro daný shortcut entry.
+    shortcut_entry může obsahovat current_value jako shell příkaz.
+    """
+    value = shortcut_entry.get("current_value")
+    if value:
+        try:
+            # Vyhodnotíme příkaz a odstraníme bílé znaky
+            result = subprocess.check_output(value, shell=True).decode().strip()
+            if result == "null":
+                log.info("fdfd")
+            return result
+        except Exception as e:
+            log.debug(f"Failed to get current_value for shortcut: {e}")
+            return None
+    return None
+
 def listen_touchpad_events():
     global slices_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys
 
@@ -940,6 +1013,7 @@ def listen_touchpad_events():
             center_button_triggered = False
             tap_disabled = False  # Track tap-to-click status
             coactivator_blocked = False
+            center_enter_time = 0
 
             for event in d_t.events():
 
@@ -956,6 +1030,7 @@ def listen_touchpad_events():
                         icon_activated = False  # Reset activation status
                         last_slice = None  # Reset the last slice
                         log.debug("Finger detected.")
+
                     elif event.value == 0:  # Finger up
                         finger_detected = False
                         touch_start_time = None  # Reset the touch start time
@@ -966,10 +1041,15 @@ def listen_touchpad_events():
                         # Reset touch coordinates
                         touch_x, touch_y = None, None
 
-                        duration_held = time() - key_press_times.get(event.code, 0)
+                        duration_held = time() - center_enter_time
                         if center_button_triggered:
-                            emulate_shortcuts("center", event.value, active_modifiers, duration_held)
+                            shortcut = emulate_shortcuts("center", event.value, active_modifiers, duration_held)
+                            if shortcut and socket_enabled:
+                                title = shortcut.get("title", None)
+                                send_to_socket("dialpad", {"input": "center", "value": 1, "title": title})
+                                send_to_socket("dialpad", {"input": "center", "value": 0, "title": title})
                             center_button_triggered = False
+
                         # Re-enable tap-to-click
                         if tap_disabled:
                             set_touchpad_prop_send_events(1)
@@ -1025,8 +1105,14 @@ def listen_touchpad_events():
                             # Only trigger if it has not been triggered already in this touch cycle
                             if not center_button_triggered:
                                 log.debug("Touch detected in center button area.")
+                                center_enter_time = time()
                                 # Trigger the center button shortcut
-                                emulate_shortcuts("center", event.value, active_modifiers)
+                                duration_held = time() - center_enter_time
+                                shortcut = emulate_shortcuts("center", event.value, active_modifiers, duration_held)
+                                if shortcut and socket_enabled:
+                                    title = shortcut.get("title", None)
+                                    send_to_socket("dialpad", {"input": "center", "value": 1, "title": title})
+                                    send_to_socket("dialpad", {"input": "center", "value": 0, "title": title})
                                 center_button_triggered = True  # Set flag to indicate the button has been pressed
                                 icon_activated = True  # Ensure it only triggers once per touch
                         else:
@@ -1043,7 +1129,12 @@ def listen_touchpad_events():
                                     direction = "clockwise" if (current_slice - last_slice) % slices_count == 1 else "counterclockwise"
                                     log.debug(f"Detected circular motion: {direction}")
                                     # Trigger rotation logic based on the direction
-                                    emulate_shortcuts(direction, event.value, active_modifiers)
+                                    shortcut = emulate_shortcuts(direction, event.value, active_modifiers)
+                                    if shortcut and socket_enabled:
+                                        value = get_current_value(shortcut)
+                                        title = shortcut.get("title", None)
+                                        send_to_socket("dialpad", {"input": direction, "value": value, "title": title})
+
                                 last_slice = current_slice
                     else:
                         pass
@@ -1052,6 +1143,8 @@ def listen_touchpad_events():
     except device.EventsDroppedException:
         for e in dev.sync(True):
             pass
+
+        listen_touchpad_events()
     except Exception as e:
         log.error(f"Error in listen_touchpad_events: {e}")
 
@@ -1422,7 +1515,7 @@ def check_gnome_layout():
 
 
 def cleanup():
-    global dialpad, display, display_wayland, stop_threads, event_notifier, watch_manager, xkb_conn
+    global dialpad, display, display_wayland, stop_threads, event_notifier, watch_manager, xkb_conn, sock
 
     log.info("Clean up started")
 
@@ -1457,6 +1550,12 @@ def cleanup():
 
         if watch_manager:
             watch_manager.close()
+
+        if sock:
+            sock.close()
+
+        if os.path.exists(SOCKET_PATH):
+            os.unlink(SOCKET_PATH)
 
         log.info("Clean up finished")
     except:
@@ -1637,8 +1736,10 @@ def load_keymap_listener_x11():
       os.kill(os.getpid(), signal.SIGUSR1)
 
 try:
+    # init the socket
+    init_socket()
 
-    # Initialize the device
+    # init the device
     initialize_virtual_device()
 
     if xdg_session_type == "wayland":
@@ -1695,7 +1796,7 @@ try:
 
     # Start the touchpad listener in a separate thread
     listen_touchpad_events()
-except:
+except e:
     logging.exception("Listening touchpad events unexpectedly failed")
 finally:
     cleanup()

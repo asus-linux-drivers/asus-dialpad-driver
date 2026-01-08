@@ -12,6 +12,8 @@
 --
 [![Nix Flakes: Compatible](https://img.shields.io/badge/Nix%20Flakes-Compatible-brightgreen)](https://github.com/asus-linux-drivers/asus-dialpad-driver#installation)
 
+![](preview/ui.png)
+
 The driver is written in python and does not necessarily run as a systemd service ([How to start DialPad without systemd service?](#faq)). It contains the common DialPad layouts, you can pick up the right one during the install process. Default settings aim to be the most convenient for the majority. All possible customizations can be found [here](#configuration).
 
 If you find this project useful, please do not forget to give it a [![GitHub stars](https://img.shields.io/github/stars/asus-linux-drivers/asus-dialpad-driver.svg?style=social&label=Star&maxAge=2592000)](https://github.com/asus-linux-drivers/asus-dialpad-driver/stargazers) People already did!
@@ -26,6 +28,10 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 
 [FAQ](#faq)
 
+## Features of User Interface
+
+- Double-clicking by left mouse button unlocks the element’s position, allowing it to be moved freely across the screen, the element can be locked again by double-clicking the left mouse button once more
+
 ## Features
 
 - Driver during installation collects anonymous data with goal improve driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/s/gaK2TftgZqM), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
@@ -36,14 +42,14 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 - Automatic DialPad layout detection
 - Activation/deactivation of DialPad by pressing and holding the top-right icon (activation time by default is 1s)
 - Optional co-activator key requirement (`Shift`, `Control`, `Alt`) to prevent accidental DialPad activation
-- Recognize of currently focused app by binary path (e.g. `/usr/share/code/code`) or part of the title (during finding the first matched shortcut wins: `visual studio code` defined after `code` will be never be matched)
-- Adding events for `clockwise`, `counterclockwise` or `center` button, the circle is delimted to slices according to config value `slices_count` (by default 4)
+- Recognize of currently focused app by binary path (e.g. `/usr/share/code/code`) or part of the title (during finding the first matched shortcut wins so `visual studio code` defined after `code` will be never be matched)
+- Adding events for `clockwise`, `counterclockwise` or `center` button, the circle is delimeted to slices according to config value `slices_count` (by default 4)
 - Adding event key `EV_KEY` with press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
 - Adding arrays of single-event `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` with values: `-1, -120`)
 - Possibility to trigger both types `EV_REL` and `EV_KEY` on release or immediately
 - Possibility to require co-activator keys (`EV_KEY.KEY_LEFTSHIFT`) for both types `EV_KEY` and `EV_REL` which makes possible to distinguish between multiple functions for each app
 - Possibility to temporary force using not app specific shortcut only without removing app specific shortcuts from layout (`config_supress_app_specifics_shortcuts`)
-- Disabling the Touchpad (e.g. Fn+special key) disables by default the NumberPad as well (can be disabled)
+- Disabling the Touchpad (e.g. Fn+special key) disables by default the DialPad as well (can be disabled)
 
 ## Data collecting
 
@@ -67,13 +73,11 @@ or customized install:
 # ENV VARS (with the defaults)
 INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
 LOGS_DIR_PATH="/var/log/asus-dialpad-driver" # only for install and uninstall logs
-SERVICE_INSTALL_DIR_PATH="/usr/lib/systemd/user"
 INSTALL_UDEV_DIR_PATH="/usr/lib/udev"
 
 # e.g. for BazziteOS (https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/198)
 $ INSTALL_DIR_PATH="/home/$USER/.local/share/asus-dialpad-driver"\
 INSTALL_UDEV_DIR_PATH="/etc/udev"\
-SERVICE_INSTALL_DIR_PATH="/home/$USER/.config/systemd/user/"\
 bash install.sh
 ```
 
@@ -307,6 +311,7 @@ disable_due_inactivity_time = 0
 touchpad_disables_dialpad = 1
 activation_time = 1
 enabled = 0
+socket_enabled = 1
 top_right_icon_coactivator_key = Alt
 ```
 
@@ -314,6 +319,7 @@ top_right_icon_coactivator_key = Alt
 | --------------------------------------------- | -------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **System**                                    |          |                   |
 | `enabled`                                     |          | `0`               | DialPad running status (enabled/disabled)
+| `socket_enabled`                                     |          | `0`               | DialPad is sending to the socket what is the user doing (enabled/disabled)
 | `disable_due_inactivity_time`                 |          | `0` [s]            | DialPad is automatically disabled when no event received for this interval<br><br>decimal numbers allowed (e.g. `60.0` [s] is one minute, `0` set up by default disables this functionality)
 | `touchpad_disables_dialpad`                    |          | `1`            | when Touchpad is disabled DialPad is disabled aswell
 | **Layout**                                |          |
@@ -322,6 +328,42 @@ top_right_icon_coactivator_key = Alt
 | **Top right icon**                            |          |                   |
 | `activation_time`              |          | `1.0` [seconds]             | amount of time you have to hold `top_right_icon`
 | `top_right_icon_coactivator_key`                     |          | ``            | empty default means no co-activator keys are required (valid values are `Shift`, `Control` or `Alt` delimeted by space)<br><br>this works only for activation by touching the top right icon
+
+## Debugging
+
+Listening on socket using `socat` (e.g. `$ sudo apt install socat`):
+
+**Is necessary to have enabled in config `socket_enabled`.**
+
+```
+$ socat - UNIX-RECV:/tmp/dialpad.sock
+{"ts": 1767791846.2734825, "event": "dialpad", "enabled": true}
+{"ts": 1767791846.3734825, "event": "dialpad", "input": "center", "value": 1}
+{"ts": 1767791846.3737416, "event": "dialpad", "input": "center", "value": 0}
+{"ts": 1767791846.461517, "event": "dialpad", "input": "counterclockwise", "value": "62", "title": "Volume"}
+{"ts": 1767791846.6073422, "event": "dialpad", "input": "counterclockwise", "value": "58", "title": "Volume"}
+{"ts": 1767791846.698195, "event": "dialpad", "input": "counterclockwise", "value": "56", "title": "Volume"}
+{"ts": 1767791846.814567, "event": "dialpad", "input": "center", "value": 1}
+{"ts": 1767791846.8146207, "event": "dialpad", "input": "center", "value": 0}
+{"ts": 1767791846.8976963, "event": "dialpad", "input": "counterclockwise", "value": "54", "title": "Volume"}
+{"ts": 1767791846.9604836, "event": "dialpad", "input": "counterclockwise", "value": "52", "title": "Volume"}
+{"ts": 1767791847.161212, "event": "dialpad", "input": "counterclockwise", "value": "50", "title": "Volume"}
+{"ts": 1767791847.3800304, "event": "dialpad", "input": "clockwise", "value": "52", "title": "Volume"}
+{"ts": 1767791847.5570402, "event": "dialpad", "input": "clockwise", "value": "54", "title": "Volume"}
+{"ts": 1767791847.6351395, "event": "dialpad", "input": "center", "value": 1}
+{"ts": 1767791847.6357095, "event": "dialpad", "input": "center", "value": 0}
+{"ts": 1767791847.7126362, "event": "dialpad", "input": "clockwise", "value": "56", "title": "Volume"}
+{"ts": 1767791847.789433, "event": "dialpad", "input": "clockwise", "value": "58", "title": "Volume"}
+{"ts": 1767791846.2734825, "event": "dialpad", "enabled": fakse}
+```
+
+```
+$ source /usr/share/asus-dialpad-driver/.env/bin/activate
+(.env) $ python3 dialpad_ui.py
+QApplication: invalid style override 'adwaita' passed, ignoring it.
+	Available styles: Windows, Fusion
+Listening on /tmp/dialpad.sock
+```
 
 ## Similar existing
 

@@ -4,7 +4,7 @@ source non_sudo_check.sh
 
 # ENV VARS
 if [ -z "$LOGS_DIR_PATH" ]; then
-    LOGS_DIR_PATH="/var/log/asus-numberpad-driver"
+    LOGS_DIR_PATH="/var/log/asus-dialpad-driver"
 fi
 
 source install_logs.sh
@@ -22,7 +22,7 @@ shopt -s extglob
 {
   # ENV VARS
   if [ -z "$INSTALL_DIR_PATH" ]; then
-    INSTALL_DIR_PATH="/usr/share/asus-numberpad-driver"
+    INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
   fi
   if [ -z "$INSTALL_UDEV_DIR_PATH" ]; then
     INSTALL_UDEV_DIR_PATH="/usr/lib/udev/"
@@ -31,21 +31,21 @@ shopt -s extglob
 	  CONFIG_FILE_DIR_PATH="$INSTALL_DIR_PATH"
   fi
   if [ -z "$CONFIG_FILE_NAME" ]; then
-	  CONFIG_FILE_NAME="numberpad_dev"
+	  CONFIG_FILE_NAME="dialpad_dev"
   fi
 
   CONFIG_FILE_PATH="$CONFIG_FILE_DIR_PATH/$CONFIG_FILE_NAME"
-	NUMPAD_LAYOUTS_DIR="$INSTALL_DIR_PATH/numpad_layouts/"
+	LAYOUTS_DIR="$INSTALL_DIR_PATH/layouts/"
 
-	NUMPAD_LAYOUTS_DIR_DIFF=""
-	if test -d "$NUMPAD_LAYOUTS_DIR"
+	LAYOUTS_DIR_DIFF=""
+	if test -d "$LAYOUTS_DIR"
 	then
-	    NUMPAD_LAYOUTS_DIR_DIFF=$(diff --exclude __pycache__ numpad_layouts $NUMPAD_LAYOUTS_DIR)
+	    LAYOUTS_DIR_DIFF=$(diff --exclude __pycache__ layouts $LAYOUTS_DIR)
 	fi
 
-	if [ "$NUMPAD_LAYOUTS_DIR_DIFF" != "" ]
+	if [ "$LAYOUTS_DIR_DIFF" != "" ]
 	then
-	    read -r -p "Installed numpad layouts contain modifications compared to the default ones. Do you want remove them [y/N]" response
+	    read -r -p "Installed layouts contain modifications compared to the default ones. Do you want remove them [y/N]" response
 	    case "$response" in [yY][eE][sS]|[yY])
 			sudo rm -rf "$INSTALL_DIR_PATH/!($CONFIG_FILE_NAME)"
 			if [[ $? != 0 ]]
@@ -54,15 +54,15 @@ shopt -s extglob
 			fi
         	;;
     	*)
-			sudo rm -rf "$INSTALL_DIR_PATH/!(numpad_layouts|$CONFIG_FILE_NAME)"
+			sudo rm -rf "$INSTALL_DIR_PATH/!(layouts|$CONFIG_FILE_NAME)"
 			if [[ $? != 0 ]]
 			then
 				echo "Something went wrong when removing files from the $INSTALL_DIR_PATH"
 			fi
 
 			echo
-			echo "Numpad layouts in $INSTALL_DIR_PATH/numpad_layouts have not been removed and remain in system:"
-	        ls /$INSTALL_DIR_PATH/numpad_layouts
+			echo "Layouts in $INSTALL_DIR_PATH/layouts have not been removed and remain in system:"
+	        ls /$INSTALL_DIR_PATH/layouts
         	;;
     	esac
 	else
@@ -78,7 +78,7 @@ shopt -s extglob
 	    read -r -p "Do you want remove config file [y/N]" RESPONSE
 	    case "$RESPONSE" in [yY][eE][sS]|[yY])
 
-			if test -d "$NUMPAD_LAYOUTS_DIR"
+			if test -d "$LAYOUTS_DIR"
 			then
 				sudo rm -f "$CONFIG_FILE_PATH"
 			else
@@ -97,7 +97,7 @@ shopt -s extglob
     	esac
 	else
 
-		if test -d "$NUMPAD_LAYOUTS_DIR"
+		if test -d "$LAYOUTS_DIR"
 		then
 			sudo rm -f $CONFIG_FILE_PATH
 		else
@@ -110,13 +110,13 @@ shopt -s extglob
 		fi
 	fi
 
-	sudo rm -f /etc/modules-load.d/i2c-dev-asus-numberpad-driver.conf
+	sudo rm -f /etc/modules-load.d/i2c-dev-asus-dialpad-driver.conf
 	if [[ $? != 0 ]]
 	then
 	    echo "Something went wrong when removing the uinput conf"
 	fi
 
-	echo "Asus NumberPad Driver removed"
+	echo "Asus DialPad Driver removed"
 
 	echo
 
@@ -124,19 +124,7 @@ shopt -s extglob
 
 	echo
 
-	source uninstall_external_keyboard_toggle.sh
-
-	echo
-
-	source uninstall_calc_toggle.sh
-
-	echo
-
 	source uninstall_service.sh
-
-	echo
-
-	source uninstall_power_supply_saver.sh
 
 	echo
 

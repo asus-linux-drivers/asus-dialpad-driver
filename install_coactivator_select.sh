@@ -53,14 +53,14 @@ if [ "$COACTIVATOR_KEY" != "None" ]; then
     echo "Applying co-activator key ($COACTIVATOR_KEY) to config file..."
 
     if [ ! -f "$CONFIG_FILE_PATH" ]; then
-        echo "[main]" | sudo tee "$CONFIG_FILE_PATH" > /dev/null
+        echo "[main]" | tee "$CONFIG_FILE_PATH" > /dev/null
     fi
 
     # check if the setting already exists
     if grep -q "top_right_icon_coactivator_key" "$CONFIG_FILE_PATH"; then
-        sudo sed -i "s/top_right_icon_coactivator_key.*/top_right_icon_coactivator_key = $COACTIVATOR_KEY/" "$CONFIG_FILE_PATH"
+        sed -i "s/top_right_icon_coactivator_key.*/top_right_icon_coactivator_key = $COACTIVATOR_KEY/" "$CONFIG_FILE_PATH"
     else
         # add new setting under [main] section
-        sudo sed -i "/\[main\]/a top_right_icon_coactivator_key = $COACTIVATOR_KEY" "$CONFIG_FILE_PATH"
+        sed -i "/\[main\]/a top_right_icon_coactivator_key = $COACTIVATOR_KEY" "$CONFIG_FILE_PATH"
     fi
 fi

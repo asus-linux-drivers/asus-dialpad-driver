@@ -355,15 +355,19 @@ $ socat - UNIX-RECV:/tmp/dialpad.sock
 {"ts": 1767791847.6357095, "event": "dialpad", "input": "center", "value": 0}
 {"ts": 1767791847.7126362, "event": "dialpad", "input": "clockwise", "value": "56", "title": "Volume"}
 {"ts": 1767791847.789433, "event": "dialpad", "input": "clockwise", "value": "58", "title": "Volume"}
-{"ts": 1767791846.2734825, "event": "dialpad", "enabled": fakse}
+{"ts": 1767791846.2734825, "event": "dialpad", "enabled": false}
 ```
 
 ```
 $ source /usr/share/asus-dialpad-driver/.env/bin/activate
 (.env) $ python3 dialpad_ui.py
-QApplication: invalid style override 'adwaita' passed, ignoring it.
-	Available styles: Windows, Fusion
 Listening on /tmp/dialpad.sock
+```
+
+Systemd service logs:
+
+```
+$ journalctl --user -u asus_dialpad_driver@$USER.service
 ```
 
 ## Similar existing

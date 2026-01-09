@@ -1,6 +1,7 @@
 
 import sys
 import os
+os.environ.pop("QT_STYLE_OVERRIDE", None)
 import json
 import socket
 from PySide6.QtWidgets import QApplication, QWidget

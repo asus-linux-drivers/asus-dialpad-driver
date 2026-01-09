@@ -828,12 +828,20 @@ synclient_status_failure_count = 0
 synclient_status_max_failure_count = 1
 
 def qdbusSet(cmd):
-    global qdbus_failure_count
+    global qdbus_failure_count, qdbus_max_failure_count
 
-    ret = subprocess.call(cmd)
+    if qdbus_failure_count < qdbus_max_failure_count:
+        try:
+            ret = subprocess.call(cmd)
 
-    if ret != 0:
-        qdbus_failure_count += 1
+            if ret != 0:
+                raise subprocess.CalledProcessError(ret, cmd)
+
+        except Exception as e:
+            log.debug(e, exc_info=True)
+            qdbus_failure_count+=1
+    else:
+        log.debug('Qdbus failed more then: \"%s\" so is not try anymore', qdbus_max_failure_count)
 
 def qdbusSetTouchpadEnabled(value):
     cmd = [
@@ -1145,8 +1153,8 @@ def listen_touchpad_events():
             pass
 
         listen_touchpad_events()
-    except Exception as e:
-        log.error(f"Error in listen_touchpad_events: {e}")
+    except Exception:
+        log.exception("Error in listen_touchpad_events")
 
 def check_config_values_changes():
     global config_lock, stop_threads, event_notifier

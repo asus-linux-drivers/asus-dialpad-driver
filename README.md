@@ -31,12 +31,10 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 ## Features of User Interface
 
 - Support for own icons in `.svg` format
-- Double-clicking by left mouse button unlocks (and locks again) the elements position allowing it to be moved across the screen
+- Double-clicking by left mouse button unlocks / locks the element position allowing it to be moved across the screen
 
 ## Features
 
-- Single-function mode
-- Multi-function mode
 - Driver during installation collects anonymous data with goal improve driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/s/gaK2TftgZqM), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
 - Driver (including backlighting if hardware supported) installed for the current user
 - Driver creates own virtual environment of currently installed version of `Python3`

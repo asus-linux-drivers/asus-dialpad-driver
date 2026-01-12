@@ -53,10 +53,6 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 - Possibility to temporary force using not app specific shortcut only without removing app specific shortcuts from layout (`config_supress_app_specifics_shortcuts`)
 - Disabling the Touchpad (e.g. Fn+special key) disables by default the DialPad as well (can be disabled)
 
-## Data collecting
-
-- Driver during installation collects anonymously data with goal improve the driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/reporting/a9ed8ed9-a0d7-42bd-96e9-57daed8697b1), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
-
 ## Installation
 
 Get the latest dev version using `git`:

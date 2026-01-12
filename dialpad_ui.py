@@ -5,10 +5,12 @@ os.environ.pop("QT_STYLE_OVERRIDE", None)
 import json
 import socket
 from PySide6.QtWidgets import QApplication, QWidget
-from PySide6.QtCore import Qt, QTimer, QRectF
-from PySide6.QtGui import QPainter, QPen, QColor
+from PySide6.QtCore import Qt, QTimer, QRectF, QPointF
+from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath, QIcon, QPixmap, QImage
+from PySide6.QtSvg import QSvgRenderer
 import logging
 import signal
+import math
 
 SOCKET_PATH = "/tmp/dialpad.sock"
 
@@ -33,6 +35,8 @@ BOX_HEIGHT = 275
 
 CIRCLE_DIAMETER = 1400
 CENTER_BUTTON_DIAMETER = 900
+
+MULTI_FUNCTION_MODE_SLICES = 4
 
 COLOR_PROGRESS = QColor("#a5988a")
 COLOR_OUTER_BG = QColor("#0e131b")
@@ -66,6 +70,8 @@ class FloatingWindow(QWidget):
         self.buffer = ""
         self.enabled = False
         self.title = ""
+        self.icons = []
+        self.titles = []
         self.center_pressed = False
         self.current_value = None
 
@@ -116,22 +122,69 @@ class FloatingWindow(QWidget):
                     else:
                         self.hide()
 
-                input_type = obj.get("input", None)
+                value = obj.get("value", None)
+                self.current_value = value
 
-                if input_type == "clockwise" or input_type == "counterclockwise":
-                    value = obj.get("value", None)
-                    self.current_value = value
-                elif input_type == "center":
-                    value = obj.get("value", False)
-                    self.current_value = value
+                titles = obj.get("titles", [])
+                if isinstance(titles, list):
+                    self.titles = titles[:4]
+
+                icons = obj.get("icons", [])
+                if isinstance(icons, list):
+                    self.icons = icons[:4]
 
                 title = obj.get("title", None)
-                if title is not None:
-                    self.title = title
+                self.title = title
                 self.update()
 
             except json.JSONDecodeError:
                 pass
+
+    def draw_svg_icon(self, painter, svg_path, rect, color: QColor):
+        if not os.path.isfile(svg_path):
+            return
+
+        renderer = QSvgRenderer(svg_path)
+        if not renderer.isValid():
+            return
+
+        size = renderer.defaultSize()
+        if size.isEmpty():
+            return
+
+        scale = min(
+            rect.width() / size.width(),
+            rect.height() / size.height()
+        )
+
+        img_w = int(size.width() * scale)
+        img_h = int(size.height() * scale)
+
+        image = QImage(
+            img_w,
+            img_h,
+            QImage.Format_ARGB32_Premultiplied
+        )
+        image.fill(Qt.transparent)
+
+        p = QPainter(image)
+        p.setRenderHint(QPainter.Antialiasing)
+        renderer.render(p)
+        p.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        p.fillRect(image.rect(), color)
+        p.end()
+
+        x = rect.x() + (rect.width() - img_w) / 2
+        y = rect.y() + (rect.height() - img_h) / 2
+
+        painter.drawImage(QPointF(x, y), image)
+
+        
+    def icon_color_for_state(self, active: bool) -> QColor:
+
+        if active:
+            return QColor(COLOR_CENTER_PRESSED_FONT)
+        return QColor(COLOR_CENTER_FONT)
 
     def paintEvent(self, event):
 
@@ -197,8 +250,6 @@ class FloatingWindow(QWidget):
             progress = max(0.0, min(100.0, progress))
             span_angle = -360.0 * (progress / 100.0)
 
-            from PySide6.QtGui import QPainterPath
-
             path = QPainterPath()
             path.moveTo(outer_rect.center())
             path.arcTo(outer_rect, 0, span_angle)
@@ -239,6 +290,148 @@ class FloatingWindow(QWidget):
                 center_rect.height()
             )
             painter.drawText(value_rect, Qt.AlignCenter, str(self.current_value))
+
+        if hasattr(self, 'titles') and self.titles:
+
+            slice_angle = 360 / MULTI_FUNCTION_MODE_SLICES
+
+            font = painter.font()
+            font.setPointSizeF(center_d * 0.08)
+            painter.setFont(font)
+
+            active_title = getattr(self, 'title', None)
+            active_index = -1
+            if active_title:
+                try:
+                    active_index = self.titles.index(active_title)
+                except ValueError:
+                    active_index = -1
+
+            #active_index = 2
+
+            for idx in range(len(self.titles)):
+                title_text = self.titles[idx] if idx < len(self.titles) else None
+
+                start_angle = idx * slice_angle
+                span_angle = slice_angle
+
+                # segment
+                path = QPainterPath()
+                path.moveTo(outer_rect.center())
+                path.arcTo(outer_rect, -start_angle, span_angle)
+                path.closeSubpath()
+
+                center_rect = QRectF(
+                    (self.width() - center_d) / 2,
+                    50 + (self.height() - 50 - 2*20 - center_d) / 2,
+                    center_d,
+                    center_d
+                )
+                hole = QPainterPath()
+                hole.addEllipse(center_rect)
+                segment_path = path.subtracted(hole)
+
+                if idx == active_index:
+                    painter.setBrush(COLOR_PROGRESS)
+                else:
+                    painter.setBrush(Qt.NoBrush)
+
+                painter.setPen(QPen(COLOR_OUTER_BG, 1))
+                painter.drawPath(segment_path)
+
+                # text
+                has_icon = (
+                    hasattr(self, 'icons')
+                    and idx < len(self.icons)
+                    and self.icons[idx]
+                )
+
+                if title_text and not has_icon:
+                    angle_deg = start_angle + span_angle / 2
+                    angle_rad = math.radians(angle_deg - 90)
+                    radius = outer_d / 2 + 10
+                    x = outer_rect.center().x() + radius * math.cos(angle_rad)
+                    y = outer_rect.center().y() + radius * math.sin(angle_rad)
+
+                    text_rect = QRectF(
+                        x - center_d * 0.2,
+                        y - center_d * 0.1,
+                        center_d * 0.4,
+                        center_d * 0.2
+                    )
+
+                    if idx == active_index:
+                        painter.setPen(COLOR_CENTER_PRESSED_FONT)
+                    else:
+                        painter.setPen(COLOR_CENTER_FONT)
+
+                    painter.drawText(text_rect, Qt.AlignCenter, title_text)
+
+        if hasattr(self, 'icons') and self.icons:
+            slice_angle = 360 / MULTI_FUNCTION_MODE_SLICES
+
+            active_title = getattr(self, 'title', None)
+            active_index = -1
+            if active_title:
+                try:
+                    active_index = self.titles.index(active_title)
+                except ValueError:
+                    pass
+
+            for idx in range(len(self.icons)):
+                icon = self.icons[idx]
+                if not icon:
+                    continue
+
+                start_angle = idx * slice_angle
+                span_angle = slice_angle
+
+                angle_deg = start_angle + span_angle / 2
+                angle_rad = math.radians(angle_deg - 90)
+                radius = outer_d / 2 + 10
+
+                x = outer_rect.center().x() + radius * math.cos(angle_rad)
+                y = outer_rect.center().y() + radius * math.sin(angle_rad)
+
+                icon_size = center_d * 0.17
+
+                ux = math.cos(angle_rad)
+                uy = math.sin(angle_rad)
+
+                # posun více do středu, 70 % poloměru
+                radius_inner = radius * 0.74
+
+                x = outer_rect.center().x() + radius_inner * ux
+                y = outer_rect.center().y() + radius_inner * uy
+
+                icon_rect = QRectF(
+                    x - icon_size / 2,
+                    y - icon_size / 2,
+                    icon_size,
+                    icon_size
+                )
+
+                is_active = (idx == active_index)
+                icon_color = self.icon_color_for_state(is_active)
+
+                # SVG cesta
+                if isinstance(icon, str) and icon.endswith(".svg") and os.path.isfile(icon):
+                    self.draw_svg_icon(painter, icon, icon_rect, icon_color)
+
+                # theme icon fallback
+                else:
+                    qicon = QIcon.fromTheme(icon)
+                    if not qicon.isNull():
+                        pixmap = qicon.pixmap(
+                            int(icon_size),
+                            int(icon_size)
+                        )
+
+                        painter.save()
+                        painter.drawPixmap(icon_rect.topLeft(), pixmap)
+                        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+                        painter.fillRect(icon_rect, icon_color)
+                        painter.restore()
 
 
 def signal_handler(sig, frame):

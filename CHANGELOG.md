@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 (TODO:)
+## 2.0.0 (12.1.2026)
 
 ### Fixed
 
@@ -9,7 +9,7 @@
 
 ### Feature
 
-- Init of User Interface
+- Init of user interface including single and multi function mode
 
 ## 1.3.0 (3.1.2026)
 

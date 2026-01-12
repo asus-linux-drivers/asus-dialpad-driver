@@ -19,7 +19,7 @@ let
 in
 python311Packages.buildPythonPackage {
   pname = "asus-dialpad-driver";
-  version = "1.3.0";
+  version = "2.0.0";
   src = ../.;
 
   format = "other";

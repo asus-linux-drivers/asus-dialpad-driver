@@ -3,7 +3,7 @@
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 ![Maintainer](https://img.shields.io/badge/maintainer-ldrahnik-blue)
 [![GitHub Release](https://img.shields.io/github/release/asus-linux-drivers/asus-dialpad-driver.svg?style=flat)](https://github.com/asus-linux-drivers/asus-dialpad-driver/releases)
-[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v1.3.0.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
+[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v2.0.0.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
 [![GitHub issues-closed](https://img.shields.io/github/issues-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/issues?q=is%3Aissue+is%3Aclosed)
 [![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/compare)
 [![Ask Me Anything !](https://img.shields.io/badge/Ask%20about-anything-1abc9c.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/new/choose)
@@ -12,7 +12,7 @@
 --
 [![Nix Flakes: Compatible](https://img.shields.io/badge/Nix%20Flakes-Compatible-brightgreen)](https://github.com/asus-linux-drivers/asus-dialpad-driver#installation)
 
-![](preview/ui.png)
+![Single function mode](preview/ui_single_function_mode.png) ![Multi function mode](preview/ui_multi_function_mode.png)
 
 The driver is written in python and does not necessarily run as a systemd service ([How to start DialPad without systemd service?](#faq)). It contains the common DialPad layouts, you can pick up the right one during the install process. Default settings aim to be the most convenient for the majority. All possible customizations can be found [here](#configuration).
 
@@ -30,10 +30,13 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 
 ## Features of User Interface
 
-- Double-clicking by left mouse button unlocks the element’s position, allowing it to be moved freely across the screen, the element can be locked again by double-clicking the left mouse button once more
+- Support for own icons in `.svg` format
+- Double-clicking by left mouse button unlocks (and locks again) the elements position allowing it to be moved across the screen
 
 ## Features
 
+- Single-function mode
+- Multi-function mode
 - Driver during installation collects anonymous data with goal improve driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/s/gaK2TftgZqM), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
 - Driver (including backlighting if hardware supported) installed for the current user
 - Driver creates own virtual environment of currently installed version of `Python3`
@@ -43,11 +46,12 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 - Activation/deactivation of DialPad by pressing and holding the top-right icon (activation time by default is 1s)
 - Optional co-activator key requirement (`Shift`, `Control`, `Alt`) to prevent accidental DialPad activation
 - Recognize of currently focused app by binary path (e.g. `/usr/share/code/code`) or part of the title (during finding the first matched shortcut wins so `visual studio code` defined after `code` will be never be matched)
+- For configured apps have a single-function mode (where only possible distinction of shortcuts is by key modifier like Shift) or multi-function mode (with confirmation/going back to menu by middle button; 4 apps in menu by default changable by config value `slices_count`)
 - Adding events for `clockwise`, `counterclockwise` or `center` button, the circle is delimeted to slices according to config value `slices_count` (by default 4)
 - Adding event key `EV_KEY` with press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
 - Adding arrays of single-event `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` with values: `-1, -120`)
 - Possibility to trigger both types `EV_REL` and `EV_KEY` on release or immediately
-- Possibility to require co-activator keys (`EV_KEY.KEY_LEFTSHIFT`) for both types `EV_KEY` and `EV_REL` which makes possible to distinguish between multiple functions for each app
+- Possibility to require co-activator keys (`EV_KEY.KEY_LEFTSHIFT`) for both types `EV_KEY` and `EV_REL` which makes possible to distinguish between multiple functions for each app in single function mode
 - Possibility to temporary force using not app specific shortcut only without removing app specific shortcuts from layout (`config_supress_app_specifics_shortcuts`)
 - Disabling the Touchpad (e.g. Fn+special key) disables by default the DialPad as well (can be disabled)
 
@@ -64,7 +68,7 @@ $ git clone https://github.com/asus-linux-drivers/asus-dialpad-driver
 $ cd asus-dialpad-driver
 # now you are using master branch with the latest changes which may be not stable
 # jump to the latest release of stable version:
-$ git checkout v1.3.0
+$ git checkout v2.0.0
 ```
 
 or customized install:
@@ -338,24 +342,24 @@ Listening on socket using `socat` (e.g. `$ sudo apt install socat`):
 
 ```
 $ socat - UNIX-RECV:/tmp/dialpad.sock
-{"ts": 1767791846.2734825, "event": "dialpad", "enabled": true}
-{"ts": 1767791846.3734825, "event": "dialpad", "input": "center", "value": 1}
-{"ts": 1767791846.3737416, "event": "dialpad", "input": "center", "value": 0}
-{"ts": 1767791846.461517, "event": "dialpad", "input": "counterclockwise", "value": "62", "title": "Volume"}
-{"ts": 1767791846.6073422, "event": "dialpad", "input": "counterclockwise", "value": "58", "title": "Volume"}
-{"ts": 1767791846.698195, "event": "dialpad", "input": "counterclockwise", "value": "56", "title": "Volume"}
-{"ts": 1767791846.814567, "event": "dialpad", "input": "center", "value": 1}
-{"ts": 1767791846.8146207, "event": "dialpad", "input": "center", "value": 0}
-{"ts": 1767791846.8976963, "event": "dialpad", "input": "counterclockwise", "value": "54", "title": "Volume"}
-{"ts": 1767791846.9604836, "event": "dialpad", "input": "counterclockwise", "value": "52", "title": "Volume"}
-{"ts": 1767791847.161212, "event": "dialpad", "input": "counterclockwise", "value": "50", "title": "Volume"}
-{"ts": 1767791847.3800304, "event": "dialpad", "input": "clockwise", "value": "52", "title": "Volume"}
-{"ts": 1767791847.5570402, "event": "dialpad", "input": "clockwise", "value": "54", "title": "Volume"}
-{"ts": 1767791847.6351395, "event": "dialpad", "input": "center", "value": 1}
-{"ts": 1767791847.6357095, "event": "dialpad", "input": "center", "value": 0}
-{"ts": 1767791847.7126362, "event": "dialpad", "input": "clockwise", "value": "56", "title": "Volume"}
-{"ts": 1767791847.789433, "event": "dialpad", "input": "clockwise", "value": "58", "title": "Volume"}
-{"ts": 1767791846.2734825, "event": "dialpad", "enabled": false}
+{"ts": 1767791846.2734825, "enabled": true}
+{"ts": 1767791846.3734825, "input": "center", "value": 1}
+{"ts": 1767791846.3737416, "input": "center", "value": 0}
+{"ts": 1767791846.461517, "input": "counterclockwise", "value": "62", "title": "Volume"}
+{"ts": 1767791846.6073422, "input": "counterclockwise", "value": "58", "title": "Volume"}
+{"ts": 1767791846.698195, "input": "counterclockwise", "value": "56", "title": "Volume"}
+{"ts": 1767791846.814567, "input": "center", "value": 1}
+{"ts": 1767791846.8146207, "input": "center", "value": 0}
+{"ts": 1767791846.8976963, "input": "counterclockwise", "value": "54", "title": "Volume"}
+{"ts": 1767791846.9604836, "input": "counterclockwise", "value": "52", "title": "Volume"}
+{"ts": 1767791847.161212, "input": "counterclockwise", "value": "50", "title": "Volume"}
+{"ts": 1767791847.3800304, "input": "clockwise", "value": "52", "title": "Volume"}
+{"ts": 1767791847.5570402, "input": "clockwise", "value": "54", "title": "Volume"}
+{"ts": 1767791847.6351395, "input": "center", "value": 1}
+{"ts": 1767791847.6357095, "input": "center", "value": 0}
+{"ts": 1767791847.7126362, "input": "clockwise", "value": "56", "title": "Volume"}
+{"ts": 1767791847.789433, "input": "clockwise", "value": "58", "title": "Volume"}
+{"ts": 1767791846.2734825, "enabled": false}
 ```
 
 ```

@@ -17,7 +17,6 @@ app_shortcuts = {
         "Volume": {
             "icon": "/usr/share/icons/elementary/status/symbolic/audio-volume-medium-symbolic.svg",
             "current_value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'",
-            "slices_count": 10,
             "clockwise": [
               # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
               {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate"}
@@ -62,12 +61,12 @@ app_shortcuts = {
         "clockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate", "title": "Scroll"},
           # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
-          {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "current_value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "slices_count": 10, "title": "Volume"}
+          {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "current_value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "title": "Volume"}
         ],
         "counterclockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [-1, -120], "trigger": "immediate", "title": "Scroll"},
           # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
-          {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "current_value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "slices_count": 10, "title": "Volume"}
+          {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "current_value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "title": "Volume"}
         ]
     }
 }

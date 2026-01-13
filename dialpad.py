@@ -2009,4 +2009,4 @@ except Exception:
 finally:
     cleanup()
     log.info("Exiting")
-g    sys.exit(1)
+    sys.exit(1)

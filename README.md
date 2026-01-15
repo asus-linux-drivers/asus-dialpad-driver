@@ -3,7 +3,7 @@
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 ![Maintainer](https://img.shields.io/badge/maintainer-ldrahnik-blue)
 [![GitHub Release](https://img.shields.io/github/release/asus-linux-drivers/asus-dialpad-driver.svg?style=flat)](https://github.com/asus-linux-drivers/asus-dialpad-driver/releases)
-[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v2.0.0.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
+[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v2.0.1.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
 [![GitHub issues-closed](https://img.shields.io/github/issues-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/issues?q=is%3Aissue+is%3Aclosed)
 [![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/compare)
 [![Ask Me Anything !](https://img.shields.io/badge/Ask%20about-anything-1abc9c.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/new/choose)
@@ -62,7 +62,7 @@ $ git clone https://github.com/asus-linux-drivers/asus-dialpad-driver
 $ cd asus-dialpad-driver
 # now you are using master branch with the latest changes which may be not stable
 # jump to the latest release of stable version:
-$ git checkout v2.0.0
+$ git checkout v2.0.1
 ```
 
 or customized install:
@@ -330,7 +330,21 @@ top_right_icon_coactivator_key = Alt
 
 ## Debugging
 
-Listening on socket using `socat` (e.g. `$ sudo apt install socat`):
+
+At first check systemd service logs:
+
+```
+$ journalctl --user -u asus_dialpad_driver@$USER.service
+```
+
+For further debugging stop installed system services:
+
+```
+$ systemctl stop --user asus_dialpad_driver_ui@ldrahnik.service
+$ systemctl stop --user asus_dialpad_driver@ldrahnik.service
+```
+
+And listen on socket using `socat` (e.g. `$ sudo apt install socat`):
 
 **Is necessary to have enabled in config `socket_enabled`.**
 
@@ -356,16 +370,15 @@ $ socat - UNIX-RECV:/tmp/dialpad.sock
 {"ts": 1767791846.2734825, "enabled": false}
 ```
 
+or use log level `DEBUG`:
+
 ```
 $ source /usr/share/asus-dialpad-driver/.env/bin/activate
-(.env) $ python3 dialpad_ui.py
+(.env) $ LOG=DEBUG python3 dialpad_ui.py
 Listening on /tmp/dialpad.sock
-```
-
-Systemd service logs:
-
-```
-$ journalctl --user -u asus_dialpad_driver@$USER.service
+2026-01-15 12:34:23,980 DEBUG {'ts': 1768476870.9540725, 'enabled': True}
+2026-01-15 12:34:26,281 DEBUG {'ts': 1768476866.2752297, 'titles': ['Volume', 'Scroll', 'Brightness'], 'icons': ['/usr/share/icons/elementary/status/symbolic/audio-volume-medium-symbolic.svg', '/usr/share/icons/elementary/status/symbolic/rotation-allowed-symbolic.svg', '/usr/share/icons/elementary/status/symbolic/display-brightness-symbolic.svg'], 'title': None}
+2026-01-15 12:34:27,481 DEBUG {'ts': 1768476867.4463465, 'enabled': False}
 ```
 
 ## Similar existing

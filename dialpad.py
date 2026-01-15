@@ -1074,11 +1074,6 @@ def listen_touchpad_events():
             title = None
             center_activated = False
             window_binary = None
-            #last_touch_x = None
-            #last_touch_y = None
-
-            # TODO: keep or not?
-            #move_treshold = 0
 
             for event in d_t.events():
 
@@ -1103,13 +1098,7 @@ def listen_touchpad_events():
                         icon_activated = False  # Reset activation status
                         last_slice = None  # Reset the last slice
                         log.debug("Finger lifted.")
-                        # Reset touch coordinates
                         touch_x, touch_y = None, None
-                        #last_touch_x = None
-                        #last_touch_y = None
-
-                        if multi_app_mode and not center_activated and socket_enabled:
-                            send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
 
                         duration_held = time() - center_enter_time
                         if center_button_triggered:
@@ -1118,23 +1107,19 @@ def listen_touchpad_events():
                                 if not multi_app_mode:
                                     shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
                                     if shortcut:
-                                        title = shortcut.get("title", None)
-                                        send_to_socket({"input": "center", "value": 1, "title": title})
-                                        send_to_socket({"input": "center", "value": 0, "title": title})
                                         center_button_triggered = False
                                 elif title:
                                     if app_specific_shortcuts['center']:
                                         center_shortcut = emulate_shortcuts(app_specific_shortcuts, 'center', event.value, active_modifiers, duration_held)
                                         if center_shortcut:
-                                            value = get_current_value(app_specific_shortcuts[title])
-                                            send_to_socket({"value": value, "title": title})
                                             center_button_triggered = False
 
                                             if not center_activated:
                                                 center_activated = True
+                                                value = get_current_value(app_specific_shortcuts[title])
+                                                send_to_socket({"value": value, "title": title})
                                             else:
                                                 center_activated = False
-                                                title = None
                                     else:
                                         value = get_current_value(shortcut)
                                         send_to_socket({"value": value, "title": title})
@@ -1146,6 +1131,9 @@ def listen_touchpad_events():
                                             center_activated = False
                                             title = None
 
+                        if multi_app_mode and not center_activated and socket_enabled:
+                            send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
+
                         # Re-enable tap-to-click
                         if tap_disabled:
                             set_touchpad_prop_send_events(1)
@@ -1156,19 +1144,6 @@ def listen_touchpad_events():
                     touch_x = event.value
                 elif event.matches(EV_ABS.ABS_MT_POSITION_Y):
                     touch_y = event.value
-
-               # if last_touch_x is None or last_touch_y is None:
-               #     last_touch_x = touch_x
-               #     last_touch_y = touch_y
-               #     continue
-                
-               # if last_touch_x is not None:
-                   # if abs(touch_x - last_touch_x) < move_treshold and \
-                   #    abs(touch_y - last_touch_y) < move_treshold:
-                   #     continue
-
-                   # last_touch_x = touch_x
-                   # last_touch_y = touch_y
 
                 # Check if the touch is in the top-right icon bounds
                 if touch_x is not None and touch_y is not None and finger_detected:
@@ -1200,7 +1175,7 @@ def listen_touchpad_events():
                     dx = touch_x - circle_center_x
                     dy = touch_y - circle_center_y
                     distance = math.sqrt(dx**2 + dy**2)
-                    angle = (math.atan2(dy, dx) * 180 / math.pi) % 360
+                    angle = (math.atan2(dy, dx) * 180 / math.pi + 90) % 360
 
                     if distance <= circle_radius and dialpad:
 
@@ -1209,30 +1184,25 @@ def listen_touchpad_events():
                             set_touchpad_prop_send_events(0)
                             tap_disabled = True
 
-                        #log.debug("Angle: %f, Distance: %f", angle, distance)
-
                         #log.info("Distance: %f, Center button radius: %f", distance, center_button_radius)
                         if distance < center_button_radius and dialpad:  # Center button area
                             # Only trigger if it has not been triggered already in this touch cycle
                             if not center_button_triggered:
                                 log.debug("Touch detected in center button area.")
+                                send_to_socket({"input": "center", "value": 1, "title": title})
                                 center_enter_time = time()
                                 # Trigger the center button shortcut
                                 duration_held = time() - center_enter_time
         
-                                if not multi_app_mode:
-                                    shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
-                                    if shortcut and socket_enabled:
-                                        title = shortcut.get("title", None)
-                                        send_to_socket({"input": "center", "value": 1, "title": title})
-                                        send_to_socket({"input": "center", "value": 0, "title": title})
+                                #if not multi_app_mode:
+                                    #shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
+                                    #if shortcut and socket_enabled:
+                                        #title = shortcut.get("title", None)
+                                        #send_to_socket({"input": "center", "value": 1, "title": title})
+                                        #send_to_socket({"input": "center", "value": 0, "title": title})
                                 center_button_triggered = True  # Set flag to indicate the button has been pressed
                                 icon_activated = True  # Ensure it only triggers once per touch
                         else:
-                            # Reset the center button triggered flag if the finger leaves the circle (but not the button area)
-                            if center_button_triggered:
-                                center_button_triggered = False
-                                icon_activated = False  # Allow the center button action to be triggered again
 
                             if multi_app_mode and not center_activated:
                                 slices_count_local = multi_app_mode_grid
@@ -1244,7 +1214,25 @@ def listen_touchpad_events():
                             # Determine the current slice based on the angle
                             current_slice = int(angle // (360 / slices_count_local))
 
-                            if current_slice != last_slice:
+                            log.debug(
+                                "TOUCH x=%d y=%d | center x=%d y=%d | dx=%d dy=%d | "
+                                "angle=%.1f° | slice_size=%.1f° | slice=%d/%d",
+                                touch_x, touch_y,
+                                circle_center_x, circle_center_y,
+                                touch_x - circle_center_x,
+                                touch_y - circle_center_y,
+                                angle,
+                                360 / slices_count_local,
+                                current_slice,
+                                slices_count_local
+                            )
+
+                            if current_slice != last_slice or center_button_triggered:
+
+                                # Reset the center button triggered flag if the finger leaves the circle (but not the button area)
+                                if center_button_triggered:
+                                    center_button_triggered = False
+                                    icon_activated = False  # Allow the center button action to be triggered again
 
                                 if last_slice is None:
                                     last_slice = current_slice
@@ -1287,8 +1275,7 @@ def listen_touchpad_events():
                                         
                                 last_slice = current_slice
                     else:
-                        pass
-                        #log.debug("Touch outside the circle. Ignoring.")
+                        log.debug("Touch outside the circle. Ignoring.")
 
     except device.EventsDroppedException:
         for e in dev.sync(True):

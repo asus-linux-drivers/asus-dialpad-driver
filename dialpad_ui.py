@@ -61,7 +61,7 @@ class FloatingWindow(QWidget):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.sock.bind(SOCKET_PATH)
         self.sock.setblocking(False)
-        print(f"Listening on {SOCKET_PATH}")
+        log.info(f"Listening on {SOCKET_PATH}")
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.read_socket)
@@ -103,7 +103,7 @@ class FloatingWindow(QWidget):
         except BlockingIOError:
             return
         except Exception as e:
-            print(f"Socket error: {e}")
+            log.exception(f"Socket error")
             return
 
         while "}" in self.buffer:
@@ -112,6 +112,7 @@ class FloatingWindow(QWidget):
             self.buffer = self.buffer[idx:]
             try:
                 obj = json.loads(chunk)
+                log.debug(obj)
                 enabled = obj.get("enabled", None)
 
                 if enabled is not None:
@@ -123,7 +124,12 @@ class FloatingWindow(QWidget):
                         self.hide()
 
                 value = obj.get("value", None)
-                self.current_value = value
+                input = obj.get("input", None)
+                if input == "center":
+                    self.center_pressed = True
+                else:
+                    self.center_pressed = False
+                    self.current_value = value
 
                 titles = obj.get("titles", [])
                 if isinstance(titles, list):
@@ -178,13 +184,6 @@ class FloatingWindow(QWidget):
         y = rect.y() + (rect.height() - img_h) / 2
 
         painter.drawImage(QPointF(x, y), image)
-
-        
-    def icon_color_for_state(self, active: bool) -> QColor:
-
-        if active:
-            return QColor(COLOR_CENTER_PRESSED_FONT)
-        return QColor(COLOR_CENTER_FONT)
 
     def paintEvent(self, event):
 
@@ -307,8 +306,6 @@ class FloatingWindow(QWidget):
                 except ValueError:
                     active_index = -1
 
-            #active_index = 2
-
             for idx in range(len(self.titles)):
                 title_text = self.titles[idx] if idx < len(self.titles) else None
 
@@ -412,7 +409,10 @@ class FloatingWindow(QWidget):
                 )
 
                 is_active = (idx == active_index)
-                icon_color = self.icon_color_for_state(is_active)
+
+                icon_color = QColor(COLOR_CENTER_FONT)
+                if is_active:
+                    icon_color = QColor(COLOR_CENTER_PRESSED_FONT)
 
                 # SVG cesta
                 if isinstance(icon, str) and icon.endswith(".svg") and os.path.isfile(icon):
@@ -435,7 +435,7 @@ class FloatingWindow(QWidget):
 
 
 def signal_handler(sig, frame):
-    print("Exiting...")
+    log.info("Exiting...")
     app.quit()
 
 if __name__ == "__main__":
@@ -447,4 +447,4 @@ if __name__ == "__main__":
 
         sys.exit(app.exec())
     except KeyboardInterrupt:
-        print("Exiting main application.")
+        log.info("Exiting main application.")

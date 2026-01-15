@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 (15.1.2026)
+
+### Fixed
+
+- Visual of pressing center button
+- Shift of circle slices about 90 degree
+
 ## 2.0.0 (12.1.2026)
 
 ### Fixed

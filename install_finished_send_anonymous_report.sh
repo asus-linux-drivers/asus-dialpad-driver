@@ -15,6 +15,7 @@ INSTALL_DURATION=$(($END_TIME - $START_TIME))
 # $SERVICE
 # $COACTIVATOR_KEY
 # $USER_INTERFACE
+# $DEVICE_ADDRESS
 # $LAYOUT_AUTO_SUGGESTION
 # $LAYOUT_AUTO_SUGGESTED_DIFFER_FROM_USED
 # $LAYOUT_AUTO_SUGGESTION_ONLINE
@@ -48,6 +49,7 @@ CURL_PAYLOAD='{
                 "touchpad": "'${TOUCHPAD}'",
                 "laptop": "'${LAPTOP}'",
                 "version": "'${DRIVER_VERSION}'",
+                "device_address": "'${DEVICE_ADDRESS}'",
                 "layout_auto_suggestion_online": "'${LAYOUT_AUTO_SUGGESTION_ONLINE}'",
                 "layout_auto_suggestion_online_found": "'${LAYOUT_AUTO_SUGGESTION_ONLINE_FOUND}'",
                 "layout_auto_suggestion_offline_found": "'${LAYOUT_AUTO_SUGGESTION_OFFLINE_FOUND}'",

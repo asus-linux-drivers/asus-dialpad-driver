@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.2 (16.1.2026)
+
+### Fixed
+
+- Added collecting of device_addresses (`0x38` or `0x15`) for kernel driver development purpose
+
 ## 2.0.1 (15.1.2026)
 
 ### Fixed

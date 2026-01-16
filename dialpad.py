@@ -1031,7 +1031,7 @@ key_press_times = {}
 import subprocess
 
 def get_current_value(shortcut_entry):
-    value = shortcut_entry.get("current_value")
+    value = shortcut_entry.get("value")
     if value:
         try:
             result = subprocess.check_output(value, shell=True).decode().strip()
@@ -1040,6 +1040,10 @@ def get_current_value(shortcut_entry):
             log.debug(f"Failed to get value for shortcut: {e}")
             return None
     return None
+
+def get_current_value_unit(shortcut_entry):
+    value = shortcut_entry.get("unit")
+    return value
 
 def listen_touchpad_events():
     global slices_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys, title, multi_app_mode_titles, app_specific_shortcuts, window_binary
@@ -1117,12 +1121,14 @@ def listen_touchpad_events():
                                             if not center_activated:
                                                 center_activated = True
                                                 value = get_current_value(app_specific_shortcuts[title])
-                                                send_to_socket({"value": value, "title": title})
+                                                value_unit = get_current_value_unit(app_specific_shortcuts[title])
+                                                send_to_socket({"value": value, "unit": value_unit, "title": title})
                                             else:
                                                 center_activated = False
                                     else:
                                         value = get_current_value(shortcut)
-                                        send_to_socket({"value": value, "title": title})
+                                        value_unit = get_current_value_unit(shortcut)
+                                        send_to_socket({"value": value, "unit": value_unit, "title": title})
                                         center_button_triggered = False
 
                                         if not center_activated:
@@ -1247,6 +1253,7 @@ def listen_touchpad_events():
                                     if center_activated and title in app_specific_shortcuts:
                                         sht = app_specific_shortcuts[title]
                                         general_value = get_current_value(sht)
+                                        general_unit = get_current_value_unit(sht)
                                     else:
                                         sht = app_specific_shortcuts
 
@@ -1257,12 +1264,16 @@ def listen_touchpad_events():
                                         if value is None and general_value:
                                             value = general_value
 
+                                        unit = get_current_value_unit(shortcut)
+                                        if unit is None and general_unit:
+                                            unit = general_unit
+
                                         try:
                                             title = shortcut["title"]
                                         except:
                                             pass                                          
 
-                                        send_to_socket({"input": direction, "value": value, "title": title})
+                                        send_to_socket({"input": direction, "value": value, "unit": unit, "title": title})
                                 else:
                                     try:
                                         title = multi_app_mode_titles[current_slice]

@@ -73,7 +73,8 @@ class FloatingWindow(QWidget):
         self.icons = []
         self.titles = []
         self.center_pressed = False
-        self.current_value = None
+        self.value = None
+        self.unit = None
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -124,12 +125,14 @@ class FloatingWindow(QWidget):
                         self.hide()
 
                 value = obj.get("value", None)
+                unit = obj.get("unit", None)
                 input = obj.get("input", None)
                 if input == "center":
                     self.center_pressed = True
                 else:
                     self.center_pressed = False
-                    self.current_value = value
+                    self.value = value
+                    self.unit = unit
 
                 titles = obj.get("titles", [])
                 if isinstance(titles, list):
@@ -240,9 +243,9 @@ class FloatingWindow(QWidget):
         )
         painter.drawEllipse(center_rect)
 
-        if self.current_value is not None:
+        if self.value is not None:
             try:
-                progress = float(self.current_value)
+                progress = float(self.value)
             except ValueError:
                 progress = 0.0
 
@@ -273,7 +276,7 @@ class FloatingWindow(QWidget):
             painter.setFont(font)
             painter.drawText(center_rect, Qt.AlignCenter, self.title)
 
-        if self.current_value is not None:
+        if self.value is not None:
             if self.center_pressed:
                 painter.setPen(COLOR_CENTER_PRESSED_FONT)
             else:
@@ -288,7 +291,7 @@ class FloatingWindow(QWidget):
                 center_rect.width(),
                 center_rect.height()
             )
-            painter.drawText(value_rect, Qt.AlignCenter, str(self.current_value))
+            painter.drawText(value_rect, Qt.AlignCenter, str(self.value) + str(self.unit))
 
         if hasattr(self, 'titles') and self.titles:
 

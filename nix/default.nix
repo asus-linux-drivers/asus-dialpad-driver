@@ -14,6 +14,7 @@ let
     pywayland
     xkbcommon
     systemd-python
+    xcffib
     python-periphery
   ]);
 in

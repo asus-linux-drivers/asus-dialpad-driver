@@ -44,13 +44,78 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 - Activation/deactivation of DialPad by pressing and holding the top-right icon (activation time by default is 1s)
 - Optional co-activator key requirement (`Shift`, `Control`, `Alt`) to prevent accidental DialPad activation
 - Recognize of currently focused app by binary path (e.g. `/usr/share/code/code`) or part of the title (during finding the first matched shortcut wins so `visual studio code` defined after `code` will be never be matched)
-- For configured apps have a single-function mode (where only possible distinction of shortcuts is by key modifier like Shift) or multi-function mode (with confirmation/going back to menu by middle button; 4 apps in menu by default changable by config value `slices_count`)
-- Adding events for `clockwise`, `counterclockwise` or `center` button, the circle is delimeted to slices according to config value `slices_count` (by default 4)
-- Adding event key `EV_KEY` with press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
-- Adding arrays of single-event `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` with values: `-1, -120`)
-- Possibility to trigger both types `EV_REL` and `EV_KEY` on release or immediately
-- Possibility to require co-activator keys (`EV_KEY.KEY_LEFTSHIFT`) for both types `EV_KEY` and `EV_REL` which makes possible to distinguish between multiple functions for each app in single function mode
-- Possibility to temporary force using not app specific shortcut only without removing app specific shortcuts from layout (`config_supress_app_specifics_shortcuts`)
+- For each configured app a possibility to define single-function or multi-function mode (when is app not recognized is used `None` block)
+- Single-function mode (distinction of shortcuts for each app is possible only by key modifier like `Shift`; for each shortcut is possible to use `clockwise`, `counterclockwise` or `center`)
+- Adding events with `EV_KEY` which contain press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
+
+```
+...
+app_shortcuts = {
+    ...
+    "none": {
+        "center": [
+          {"key": EV_KEY.KEY_MUTE, "trigger": "release", "duration": 1, "modifier": EV_KEY.KEY_LEFTSHIFT}
+        ],
+        "clockwise": [
+          {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate", "title": "Scroll"},
+          # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
+          {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "unit": "%", "title": "Volume"}
+        ],
+        "counterclockwise": [
+          {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [-1, -120], "trigger": "immediate", "title": "Scroll"},
+          # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
+          {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "unit": "%", "title": "Volume"}
+        ]
+    }
+}
+```
+
+- Multi-function mode (not possible to use `center` because middle button is used as configuration button / return button between functions; by default is grid of circle rendered for 5 apps `slices_minimum_count=5`)
+- Using `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` and values: `-1, -120`)
+
+```
+        "Scroll": {
+            "icon": "/usr/share/icons/elementary/status/symbolic/rotation-allowed-symbolic.svg",
+            "clockwise": [
+               {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate"},
+            ],
+            "counterclockwise": [
+              {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [-1, -120], "trigger": "immediate"},
+            ]
+        },
+```
+- Using `command` for toggling instead of sending any key
+- Have icon displayed according to current state determined by `value` command
+
+```
+        "Notifications": {
+          "value": "dconf read /io/elementary/notifications/do-not-disturb",
+          "icons": {
+              "true": "/usr/share/icons/elementary/status/symbolic/notification-disabled-symbolic.svg",
+              "false": "/usr/share/icons/elementary/status/symbolic/notification-symbolic.svg"
+          },
+          # toggle do-not-disturb ("command" with toggle effect is preferred if exists over going into and clockwise/counterclockwise)
+          "command": 'dconf write /io/elementary/notifications/do-not-disturb "$( [ "$(dconf read /io/elementary/notifications/do-not-disturb)" = "true" ] && echo false || echo true )"',
+        },
+```
+
+- Possibility to trigger both types `EV_REL` and `EV_KEY` on `release` or `immediately`
+- Using for a less continous function with increasing `treshold` (e.g. editing changes undo and redo)
+
+```
+        "Edit": {
+            "icon": "/usr/share/icons/elementary/status/symbolic/media-playlist-repeat-symbolic-rtl.svg",
+            "treshold": 180,
+            "clockwise": [
+              {"key": [EV_KEY.KEY_LEFTCTRL, EV_KEY.KEY_Y], "trigger": "immediate"}
+            ],
+            "counterclockwise": [
+              {"key": [EV_KEY.KEY_LEFTCTRL, EV_KEY.KEY_Z], "trigger": "immediate"}
+            ]
+        },
+```
+
+- Possibility to temporary force using not app specific shortcut without removing app specific shortcuts from layout (`config_supress_app_specifics_shortcuts`)
 - Disabling the Touchpad (e.g. Fn+special key) disables by default the DialPad as well (can be disabled)
 
 ## Installation
@@ -312,6 +377,8 @@ activation_time = 1
 enabled = 0
 socket_enabled = 1
 top_right_icon_coactivator_key = Alt
+default_treshold = 90
+slices_minimum_count = 5
 ```
 
 | Option                                        | Required | Default           | Description |
@@ -322,7 +389,8 @@ top_right_icon_coactivator_key = Alt
 | `disable_due_inactivity_time`                 |          | `0` [s]            | DialPad is automatically disabled when no event received for this interval<br><br>decimal numbers allowed (e.g. `60.0` [s] is one minute, `0` set up by default disables this functionality)
 | `touchpad_disables_dialpad`                    |          | `1`            | when Touchpad is disabled DialPad is disabled aswell
 | **Layout**                                |          |
-| `slices_count`              |          | `1.0` [seconds]             | number of slices in the circle considered as steps when moving with finger around
+| `slices_minimum_count`              |          | `5`             | minimum count of slices in the circle for multi-functional mode
+| `default_treshold`              |          | `90` [angle]             | this angle is considered as one step when moving with finger around
 | `suppress_app_specifics_shortcuts`              |          | `0`             | app specific shortcuts are ignored when is specific window with app opened
 | **Top right icon**                            |          |                   |
 | `activation_time`              |          | `1.0` [seconds]             | amount of time you have to hold `top_right_icon`

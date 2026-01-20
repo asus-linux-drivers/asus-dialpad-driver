@@ -6,7 +6,7 @@ import json
 import socket
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF
-from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath, QIcon, QPixmap, QImage
+from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath, QIcon, QImage
 from PySide6.QtSvg import QSvgRenderer
 import logging
 import signal
@@ -35,8 +35,6 @@ BOX_HEIGHT = 275
 
 CIRCLE_DIAMETER = 1400
 CENTER_BUTTON_DIAMETER = 900
-
-MULTI_FUNCTION_MODE_SLICES = 4
 
 COLOR_PROGRESS = QColor("#a5988a")
 COLOR_OUTER_BG = QColor("#0e131b")
@@ -136,11 +134,11 @@ class FloatingWindow(QWidget):
 
                 titles = obj.get("titles", [])
                 if isinstance(titles, list):
-                    self.titles = titles[:4]
+                    self.titles = titles
 
                 icons = obj.get("icons", [])
                 if isinstance(icons, list):
-                    self.icons = icons[:4]
+                    self.icons = icons
 
                 title = obj.get("title", None)
                 self.title = title
@@ -291,11 +289,14 @@ class FloatingWindow(QWidget):
                 center_rect.width(),
                 center_rect.height()
             )
-            painter.drawText(value_rect, Qt.AlignCenter, str(self.value) + str(self.unit))
+            if self.unit is not None:
+                painter.drawText(value_rect, Qt.AlignCenter, str(self.value) + str(self.unit))
+            else:
+                painter.drawText(value_rect, Qt.AlignCenter, str(self.value) + str(self.unit))
 
-        if hasattr(self, 'titles') and self.titles:
+        if hasattr(self, 'titles') and self.titles and type(self.titles) is list and len(self.titles) > 0:
 
-            slice_angle = 360 / MULTI_FUNCTION_MODE_SLICES
+            slice_angle = 360 / len(self.titles)
 
             font = painter.font()
             font.setPointSizeF(center_d * 0.08)
@@ -367,8 +368,8 @@ class FloatingWindow(QWidget):
 
                     painter.drawText(text_rect, Qt.AlignCenter, title_text)
 
-        if hasattr(self, 'icons') and self.icons:
-            slice_angle = 360 / MULTI_FUNCTION_MODE_SLICES
+        if hasattr(self, 'icons') and type(self.icons) is list and len(self.icons) > 0:
+            slice_angle = 360 / len(self.icons)
 
             active_title = getattr(self, 'title', None)
             active_index = -1
@@ -387,7 +388,7 @@ class FloatingWindow(QWidget):
                 span_angle = slice_angle
 
                 angle_deg = start_angle + span_angle / 2
-                angle_rad = math.radians(angle_deg - 90)
+                angle_rad = math.radians(angle_deg - slice_angle)
                 radius = outer_d / 2 + 10
 
                 x = outer_rect.center().x() + radius * math.cos(angle_rad)
@@ -398,7 +399,6 @@ class FloatingWindow(QWidget):
                 ux = math.cos(angle_rad)
                 uy = math.sin(angle_rad)
 
-                # posun více do středu, 70 % poloměru
                 radius_inner = radius * 0.74
 
                 x = outer_rect.center().x() + radius_inner * ux
@@ -417,11 +417,10 @@ class FloatingWindow(QWidget):
                 if is_active:
                     icon_color = QColor(COLOR_CENTER_PRESSED_FONT)
 
-                # SVG cesta
+                # SVG icon
                 if isinstance(icon, str) and icon.endswith(".svg") and os.path.isfile(icon):
                     self.draw_svg_icon(painter, icon, icon_rect, icon_color)
 
-                # theme icon fallback
                 else:
                     qicon = QIcon.fromTheme(icon)
                     if not qicon.isNull():

@@ -12,8 +12,27 @@ circle_center_y = 573
 app_shortcuts = {
     "/usr/share/code/code": {
         "center": [
-          {"trigger": "immediate", "duration": 0.5}
+            {"trigger": "immediate", "duration": 0.5}
         ],
+        "Notifications": {
+          "value": "dconf read /io/elementary/notifications/do-not-disturb",
+          "icons": {
+              "true": "/usr/share/icons/elementary/status/symbolic/notification-disabled-symbolic.svg",
+              "false": "/usr/share/icons/elementary/status/symbolic/notification-symbolic.svg"
+          },
+          # toggle do-not-disturb ("command" with toggle effect is preferred if exists over going into and clockwise/counterclockwise)
+          "command": 'dconf write /io/elementary/notifications/do-not-disturb "$( [ "$(dconf read /io/elementary/notifications/do-not-disturb)" = "true" ] && echo false || echo true )"',
+        },
+        "Edit": {
+            "icon": "/usr/share/icons/elementary/status/symbolic/media-playlist-repeat-symbolic-rtl.svg",
+            "treshold": 180,
+            "clockwise": [
+              {"key": [EV_KEY.KEY_LEFTCTRL, EV_KEY.KEY_Y], "trigger": "release"}
+            ],
+            "counterclockwise": [
+              {"key": [EV_KEY.KEY_LEFTCTRL, EV_KEY.KEY_Z], "trigger": "release"}
+            ]
+        },
         "Volume": {
             "icon": "/usr/share/icons/elementary/status/symbolic/audio-volume-medium-symbolic.svg",
             "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'",

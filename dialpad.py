@@ -92,7 +92,6 @@ multi_app_mode_titles = None
 multi_app_mode_icons = None
 app_specific_shortcuts = {}
 app_name = None
-multi_app_mode_grid = 4
 
 if xdg_session_type == "x11":
     try:
@@ -287,8 +286,10 @@ CONFIG_ENABLED = "enabled"
 CONFIG_SOCKET_ENABLED = "socket_enabled"
 CONFIG_SOCKET_ENABLED_DEFAULT = True
 CONFIG_ENABLED_DEFAULT = False
-CONFIG_SLICES_COUNT = "slices_count"
-CONFIG_SLICES_COUNT_DEFAULT = 4
+CONFIG_SLICES_MINIMUM_COUNT = "slices_minimum_count"
+CONFIG_SLICES_MINIMUM_COUNT_DEFAULT = 4
+CONFIG_DEFAULT_TRESHOLD = "default_treshold"
+CONFIG_DEFAULT_TRESHOLD_DEFAULT = 90
 CONFIG_DISABLE_DUE_INACTIVITY_TIME = "disable_due_inactivity_time"
 CONFIG_DISABLE_DUE_INACTIVITY_TIME_DEFAULT = 120
 CONFIG_TOUCHPAD_DISABLES_DIALPAD = "touchpad_disables_dialpad"
@@ -420,6 +421,17 @@ def is_multifunction(app_config):
             icon = value.get("icon")
             if icon:
                 non_standard_keys_icons.append(icon)
+            icons = None
+            try:
+                icons = value.get("icons")
+            except:
+                pass
+            if icons:
+                value_command = value.get("value")
+                if value_command:
+                    value_command_output = get_current_value(value)
+                    icon = icons[value_command_output]
+                    non_standard_keys_icons.append(icon)
 
     return bool(len(non_standard_keys)), non_standard_keys, non_standard_keys_icons
 
@@ -429,10 +441,13 @@ def load_all_config_values():
     global touchpad_disables_dialpad
     global activation_time
     global config_lock
-    global slices_count
+    global slices_minimum_count
+    global default_treshold
     global suppress_app_specifics_shortcuts
     global coactivator_keys
     global socket_enabled
+    global multi_app_mode_titles
+    global multi_app_mode_icons
 
     #log.debug("load_all_config_values: config_lock.acquire will be called")
     config_lock.acquire()
@@ -444,10 +459,14 @@ def load_all_config_values():
     touchpad_disables_dialpad = config_get(CONFIG_TOUCHPAD_DISABLES_DIALPAD, CONFIG_TOUCHPAD_DISABLES_DIALPAD_DEFAULT)
     activation_time = float(config_get(CONFIG_ACTIVATION_TIME, CONFIG_ACTIVATION_TIME_DEFAULT))
     enabled = config_get(CONFIG_ENABLED, CONFIG_ENABLED_DEFAULT)
-    slices_count = int(config_get(CONFIG_SLICES_COUNT, CONFIG_SLICES_COUNT_DEFAULT))
+    slices_minimum_count = int(config_get(CONFIG_SLICES_MINIMUM_COUNT, CONFIG_SLICES_MINIMUM_COUNT_DEFAULT))
+    default_treshold = int(config_get(CONFIG_DEFAULT_TRESHOLD, CONFIG_DEFAULT_TRESHOLD_DEFAULT))
     suppress_app_specifics_shortcuts = int(config_get(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS, CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT))
     coactivator_keys = config_get(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY, CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT).strip().split()
     socket_enabled = config_get(CONFIG_SOCKET_ENABLED, CONFIG_SOCKET_ENABLED_DEFAULT)
+
+    multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles, slices_minimum_count)
+    multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons, slices_minimum_count)
 
     config_lock.release()
 
@@ -738,16 +757,18 @@ def emulate_shortcuts(app_shortcuts, touch_input, event_code, active_modifiers, 
         if (modifier and modifier in active_modifiers) or (not modifier and not active_modifiers):
             if duration_held is None or duration_held >= required_duration:
                 if (trigger_mode == "immediate" and event_code) or\
-                    (trigger_mode == "release" and not event_code):
+                    (trigger_mode == "release" and not event_code) or\
+                    (touch_input == "center"):
+
                     if key_code:
                         send_key_event(key_code, key_value)
 
-                log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
-                return shortcut # Stop after first valid shortcut
+                    log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
+                    return shortcut # Stop after first valid shortcut
             else:
                 #log.info(trigger_mode)
                 #log.info(event_code)
-                if (trigger_mode == "immediate" and not event_code) or (trigger_mode == "release" and not event_code):
+                if (trigger_mode == "immediate" and event_code) or (trigger_mode == "release" and not event_code):
                     log.info(f"Shortcut {key_code} with value {key_value} requires {required_duration}s, but was held for {duration_held:.2f}s")
 
     return None
@@ -763,12 +784,24 @@ def send_key_event(key_code, key_value):
 
     try:
         if isinstance(key_code, list):
-            for c, v in zip(key_code, key_value):
-                if c.type == EV_REL:
-                    uinput_device.send_events([
-                        InputEvent(c, v),
-                        InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
-                    ])
+            if key_code and key_value:
+                for c, v in zip(key_code, key_value):
+                    if c.type == EV_REL:
+                        uinput_device.send_events([
+                            InputEvent(c, v),
+                            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                        ])
+            elif key_code:
+                for c in key_code:
+                    if c.type == EV_KEY:
+                        uinput_device.send_events([
+                            InputEvent(c, 1),
+                            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                        ])
+                        uinput_device.send_events([
+                            InputEvent(c, 0),
+                            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                        ])
         else:
             uinput_device.send_events([
                 InputEvent(key_code, 1),
@@ -1045,15 +1078,27 @@ def get_current_value_unit(shortcut_entry):
     value = shortcut_entry.get("unit")
     return value
 
+def execute_command(command):
+    try:
+        subprocess.run(command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        log.error(f"Failed to execute command: {e}")
+
+def reset_center():
+    global center_activated, title, treshold
+
+    center_activated = False
+    title = None
+    treshold = None
+
 def listen_touchpad_events():
-    global slices_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys, title, multi_app_mode_titles, app_specific_shortcuts, window_binary
+    global slices_minimum_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys, title, treshold, multi_app_mode_titles, app_specific_shortcuts, window_binary
 
     try:
 
             # Define circle and slices
             circle_radius = circle_diameter / 2
             center_button_radius = center_button_diameter / 2
-
 
             # Define the bounds for the top-right icon
             top_right_icon_bounds = {
@@ -1078,6 +1123,7 @@ def listen_touchpad_events():
             title = None
             center_activated = False
             window_binary = None
+            treshold = None
 
             for event in d_t.events():
 
@@ -1112,13 +1158,20 @@ def listen_touchpad_events():
                                     shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
                                     if shortcut:
                                         center_button_triggered = False
+ 
+                                        command = app_specific_shortcuts[title].get("command")
+                                        if command:
+                                            execute_command(command)
                                 elif title:
                                     if app_specific_shortcuts['center']:
                                         center_shortcut = emulate_shortcuts(app_specific_shortcuts, 'center', event.value, active_modifiers, duration_held)
                                         if center_shortcut:
                                             center_button_triggered = False
 
-                                            if not center_activated:
+                                            command = app_specific_shortcuts[title].get("command")
+                                            if command:
+                                                execute_command(command)
+                                            elif not center_activated:
                                                 center_activated = True
                                                 value = get_current_value(app_specific_shortcuts[title])
                                                 value_unit = get_current_value_unit(app_specific_shortcuts[title])
@@ -1134,8 +1187,7 @@ def listen_touchpad_events():
                                         if not center_activated:
                                             center_activated = True
                                         else:
-                                            center_activated = False
-                                            title = None
+                                            reset_center()
 
                         if multi_app_mode and not center_activated and socket_enabled:
                             send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
@@ -1199,7 +1251,7 @@ def listen_touchpad_events():
                                 center_enter_time = time()
                                 # Trigger the center button shortcut
                                 duration_held = time() - center_enter_time
-        
+
                                 #if not multi_app_mode:
                                     #shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
                                     #if shortcut and socket_enabled:
@@ -1211,26 +1263,28 @@ def listen_touchpad_events():
                         else:
 
                             if multi_app_mode and not center_activated:
-                                slices_count_local = multi_app_mode_grid
+                                one_slice_angle = 360 / max(len(multi_app_mode_titles), slices_minimum_count)
                             else:
-                                # from the config
-                                slices_count_local = slices_count
-                                pass
+                                try:
+                                    treshold = app_specific_shortcuts[title]["treshold"]
+                                    one_slice_angle = treshold
+                                except:
+                                    # from the config
+                                    one_slice_angle = default_treshold
 
                             # Determine the current slice based on the angle
-                            current_slice = int(angle // (360 / slices_count_local))
+                            current_slice = int(angle // (one_slice_angle))
 
                             log.debug(
                                 "TOUCH x=%d y=%d | center x=%d y=%d | dx=%d dy=%d | "
-                                "angle=%.1f° | slice_size=%.1f° | slice=%d/%d",
+                                "angle=%.1f° | one slice angle (or treshold)=%.1f° | default_treshold=%.1f°",
                                 touch_x, touch_y,
                                 circle_center_x, circle_center_y,
                                 touch_x - circle_center_x,
                                 touch_y - circle_center_y,
                                 angle,
-                                360 / slices_count_local,
-                                current_slice,
-                                slices_count_local
+                                one_slice_angle,
+                                default_treshold
                             )
 
                             if current_slice != last_slice or center_button_triggered:
@@ -1242,14 +1296,18 @@ def listen_touchpad_events():
 
                                 if last_slice is None:
                                     last_slice = current_slice
+                                else:
+                                    pass
 
                                 # Trigger rotation logic based on the direction
                                 if not multi_app_mode or center_activated:
                                     # Determine the direction of rotation
-                                    direction = "clockwise" if (current_slice - last_slice) % slices_count_local == 1 else "counterclockwise"
+                                    direction = "clockwise" if (current_slice - last_slice) % one_slice_angle == 1 else "counterclockwise"
                                     log.debug(f"Detected circular motion: {direction}")
 
                                     general_value = None
+                                    general_unit = None
+
                                     if center_activated and title in app_specific_shortcuts:
                                         sht = app_specific_shortcuts[title]
                                         general_value = get_current_value(sht)
@@ -1271,7 +1329,7 @@ def listen_touchpad_events():
                                         try:
                                             title = shortcut["title"]
                                         except:
-                                            pass                                          
+                                            pass                                   
 
                                         send_to_socket({"input": direction, "value": value, "unit": unit, "title": title})
                                 else:
@@ -1603,6 +1661,10 @@ def extract_icons(app_specific_shortcuts):
 
     return icons
 
+def pad_to_minimum(arr, minimum):
+    if arr is None:
+        arr = []
+    return arr + [None] * max(0, minimum - len(arr))
 
 def check_window():
     global stop_threads, window_binary, window_title, app_name, app_specific_shortcuts, multi_app_mode, multi_app_mode_titles, multi_app_mode_icons,\
@@ -1627,12 +1689,12 @@ def check_window():
             multi_app_mode = multi_app_mode_local
             update = True
 
-        if multi_app_mode_titles_local != multi_app_mode_titles:
-            multi_app_mode_titles = multi_app_mode_titles_local
+        if multi_app_mode_titles_local != pad_to_minimum(multi_app_mode_titles, slices_minimum_count):
+            multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles_local, slices_minimum_count)
             update = True
 
-        if multi_app_mode_icons_local != multi_app_mode_icons:
-            multi_app_mode_icons = multi_app_mode_icons_local
+        if multi_app_mode_icons_local != pad_to_minimum(multi_app_mode_icons, slices_minimum_count):
+            multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons_local, slices_minimum_count)
             update = True
 
         if update:

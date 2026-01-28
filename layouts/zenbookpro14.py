@@ -8,11 +8,14 @@ center_button_diameter = 364
 circle_center_x = 586
 circle_center_y = 573
 
-# current_value and title is optional because it is used for the user interface
+
+#
+# below is just example configuration for some applications
+#
 app_shortcuts = {
     "/usr/share/code/code": {
         "center": [
-            {"trigger": "immediate", "duration": 0.5}
+            {"trigger": "release", "duration": 0.5}
         ],
         "Notifications": {
           "value": "dconf read /io/elementary/notifications/do-not-disturb",
@@ -20,30 +23,28 @@ app_shortcuts = {
               "true": "/usr/share/icons/elementary/status/symbolic/notification-disabled-symbolic.svg",
               "false": "/usr/share/icons/elementary/status/symbolic/notification-symbolic.svg"
           },
-          # toggle do-not-disturb ("command" with toggle effect is preferred if exists over going into and clockwise/counterclockwise)
+          # toggles do-not-disturb
           "command": 'dconf write /io/elementary/notifications/do-not-disturb "$( [ "$(dconf read /io/elementary/notifications/do-not-disturb)" = "true" ] && echo false || echo true )"',
         },
         "Edit": {
             "icon": "/usr/share/icons/elementary/status/symbolic/media-playlist-repeat-symbolic-rtl.svg",
             "treshold": 180,
             "clockwise": [
-              {"key": [EV_KEY.KEY_LEFTCTRL, EV_KEY.KEY_Y], "trigger": "release"}
+              {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate"}
             ],
             "counterclockwise": [
-              {"key": [EV_KEY.KEY_LEFTCTRL, EV_KEY.KEY_Z], "trigger": "release"}
+              {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate"}
             ]
         },
         "Volume": {
             "icon": "/usr/share/icons/elementary/status/symbolic/audio-volume-medium-symbolic.svg",
-            "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'",
+            "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\\d+%' | head -n 1 | tr -d '%'",
             "unit": "%",
             "clockwise": [
-              # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
-              {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate"}
+              {"command": "pactl set-sink-volume @DEFAULT_SINK@ +8%", "trigger": "immediate"}
             ],
             "counterclockwise": [
-              # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
-              {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate"}
+              {"command": "pactl set-sink-volume @DEFAULT_SINK@ -8%", "trigger": "immediate"}
             ]
         },
         "Scroll": {
@@ -81,13 +82,11 @@ app_shortcuts = {
         ],
         "clockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [1, 120], "trigger": "immediate", "title": "Scroll"},
-          # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
-          {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "unit": "%", "title": "Volume"}
+          {"key": EV_KEY.KEY_VOLUMEUP, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\\d+%' | head -n 1 | tr -d '%'", "unit": "%", "title": "Volume"}
         ],
         "counterclockwise": [
           {"key": [EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES], "value": [-1, -120], "trigger": "immediate", "title": "Scroll"},
-          # works even better with `dconf write /org/gnome/desktop/sound/allow-volume-above-100-percent true`
-          {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\d+%' | head -n 1 | tr -d '%'", "unit": "%", "title": "Volume"}
+          {"key": EV_KEY.KEY_VOLUMEDOWN, "trigger": "immediate", "modifier": EV_KEY.KEY_LEFTSHIFT, "value": "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\\d+%' | head -n 1 | tr -d '%'", "unit": "%", "title": "Volume"}
         ]
     }
 }

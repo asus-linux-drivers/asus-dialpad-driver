@@ -72,7 +72,9 @@ class FloatingWindow(QWidget):
         self.titles = []
         self.center_pressed = False
         self.value = None
+        self.value_angle_start = None
         self.unit = None
+        self.value_show_only_progress = True
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -123,14 +125,25 @@ class FloatingWindow(QWidget):
                         self.hide()
 
                 value = obj.get("value", None)
+                value_angle_start = obj.get("value_angle_start", None)
                 unit = obj.get("unit", None)
                 input = obj.get("input", None)
                 if input == "center":
-                    self.center_pressed = True
+                    self.center_pressed = value
+
+                    # If was any progress - reset value display
+                    if self.value_show_only_progress is True:
+                        self.value = None
+                        self.value_angle_start = None
+                        self.unit = None
                 else:
                     self.center_pressed = False
                     self.value = value
+                    self.value_angle_start = value_angle_start
                     self.unit = unit
+
+                value_show_only_progress = obj.get("value_show_only_progress", None)
+                self.value_show_only_progress = value_show_only_progress
 
                 titles = obj.get("titles", [])
                 if isinstance(titles, list):
@@ -142,6 +155,7 @@ class FloatingWindow(QWidget):
 
                 title = obj.get("title", None)
                 self.title = title
+
                 self.update()
 
             except json.JSONDecodeError:
@@ -247,12 +261,17 @@ class FloatingWindow(QWidget):
             except ValueError:
                 progress = 0.0
 
-            progress = max(0.0, min(100.0, progress))
+            progress = max(min(progress, 100.0), -100.0)
             span_angle = -360.0 * (progress / 100.0)
+
+            if self.value_angle_start is not None:
+                qt_start_angle = -(self.value_angle_start - 90)
+            else:
+                qt_start_angle = 0
 
             path = QPainterPath()
             path.moveTo(outer_rect.center())
-            path.arcTo(outer_rect, 0, span_angle)
+            path.arcTo(outer_rect, qt_start_angle, span_angle)
             path.closeSubpath()
 
             hole = QPainterPath()
@@ -274,7 +293,7 @@ class FloatingWindow(QWidget):
             painter.setFont(font)
             painter.drawText(center_rect, Qt.AlignCenter, self.title)
 
-        if self.value is not None:
+        if self.value is not None and self.value_show_only_progress is not True:
             if self.center_pressed:
                 painter.setPen(COLOR_CENTER_PRESSED_FONT)
             else:
@@ -292,7 +311,7 @@ class FloatingWindow(QWidget):
             if self.unit is not None:
                 painter.drawText(value_rect, Qt.AlignCenter, str(self.value) + str(self.unit))
             else:
-                painter.drawText(value_rect, Qt.AlignCenter, str(self.value) + str(self.unit))
+                painter.drawText(value_rect, Qt.AlignCenter, str(self.value))
 
         if hasattr(self, 'titles') and self.titles and type(self.titles) is list and len(self.titles) > 0:
 

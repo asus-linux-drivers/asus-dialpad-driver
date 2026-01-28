@@ -120,7 +120,7 @@ app_shortcuts = {
 
 ## Installation
 
-Get the latest dev version using `git`:
+Get the latest stable or dev version using `git`:
 
 ```bash
 $ git clone https://github.com/asus-linux-drivers/asus-dialpad-driver
@@ -385,9 +385,11 @@ slices_minimum_count = 5
 | --------------------------------------------- | -------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **System**                                    |          |                   |
 | `enabled`                                     |          | `0`               | DialPad running status (enabled/disabled)
-| `socket_enabled`                                     |          | `0`               | DialPad is sending to the socket what is the user doing (enabled/disabled)
 | `disable_due_inactivity_time`                 |          | `0` [s]            | DialPad is automatically disabled when no event received for this interval<br><br>decimal numbers allowed (e.g. `60.0` [s] is one minute, `0` set up by default disables this functionality)
 | `touchpad_disables_dialpad`                    |          | `1`            | when Touchpad is disabled DialPad is disabled aswell
+| **User Interface**                                |          |
+| `socket_enabled`                                     |          | `0`               | DialPad is sending to the socket what is the user doing (enabled/disabled)
+| `socket_send_progress_above_treshold`                                     |          | `120`               | Is send progress when command `value` is not defined and angle is above this
 | **Layout**                                |          |
 | `slices_minimum_count`              |          | `5`             | minimum count of slices in the circle for multi-functional mode
 | `default_treshold`              |          | `90` [angle]             | this angle is considered as one step when moving with finger around
@@ -405,11 +407,17 @@ At first check systemd service logs:
 $ journalctl --user -u asus_dialpad_driver@$USER.service
 ```
 
-For further debugging stop installed system services:
+For further debugging stop installed systemd services:
 
 ```
-$ systemctl stop --user asus_dialpad_driver_ui@ldrahnik.service
-$ systemctl stop --user asus_dialpad_driver@ldrahnik.service
+systemctl --user stop asus_dialpad_driver@ldrahnik.service
+systemctl --user disable asus_dialpad_driver@ldrahnik.service
+
+systemctl --user stop asus_dialpad_driver_ui@ldrahnik.service
+systemctl --user disable asus_dialpad_driver_ui@ldrahnik.service
+
+systemctl --user stop asus_numberpad_driver@ldrahnik.service
+systemctl --user disable asus_numberpad_driver@ldrahnik.service
 ```
 
 And listen on socket using `socat` (e.g. `$ sudo apt install socat`):

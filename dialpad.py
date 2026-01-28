@@ -16,8 +16,6 @@ from periphery import I2C
 from typing import Optional
 import re
 import math
-from pywayland.client import Display
-from pywayland.protocol.wayland import WlSeat
 import subprocess
 import configparser
 import ast
@@ -30,7 +28,6 @@ import xcffib.xkb
 import glob
 import socket
 import json
-
 SOCKET_PATH = "/tmp/dialpad.sock"
 sock = None
 
@@ -44,6 +41,14 @@ def init_socket():
     except Exception as e:
         log.error("Failed to initialize socket: %s", e)
         sock = None
+
+PYWAYLAND_AVAILABLE = False
+try:
+    from pywayland.client import Display
+    from pywayland.protocol.wayland import WlSeat
+    PYWAYLAND_AVAILABLE = True
+except ImportError:
+    pass
 
 SYSTEMD_JOURNAL_AVAILABLE = False
 try:
@@ -300,6 +305,8 @@ CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS = "config_supress_app_specifics_shortcut
 CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT = False
 CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY = "top_right_icon_coactivator_key"
 CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT = ""  # Empty means no co-activator required
+CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD = "socket_send_progress_above_treshold"
+CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD_DEFAULT = 120
 
 config_file_path = config_file_dir + CONFIG_FILE_NAME
 config = configparser.ConfigParser()
@@ -448,6 +455,7 @@ def load_all_config_values():
     global socket_enabled
     global multi_app_mode_titles
     global multi_app_mode_icons
+    global socket_send_progress_above_treshold
 
     #log.debug("load_all_config_values: config_lock.acquire will be called")
     config_lock.acquire()
@@ -464,6 +472,7 @@ def load_all_config_values():
     suppress_app_specifics_shortcuts = int(config_get(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS, CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT))
     coactivator_keys = config_get(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY, CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT).strip().split()
     socket_enabled = config_get(CONFIG_SOCKET_ENABLED, CONFIG_SOCKET_ENABLED_DEFAULT)
+    socket_send_progress_above_treshold = int(config_get(CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD, CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD_DEFAULT))
 
     multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles, slices_minimum_count)
     multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons, slices_minimum_count)
@@ -749,6 +758,11 @@ def emulate_shortcuts(app_shortcuts, touch_input, event_code, active_modifiers, 
             key_value = shortcut["value"]
         except:
             pass
+        command = None
+        try:
+            command = shortcut["command"]
+        except:
+            pass
         trigger_mode = shortcut.get("trigger", "release")
         modifier = shortcut.get("modifier")
         required_duration = shortcut.get("duration", 0)  # Default to 0 (immediate)
@@ -762,6 +776,8 @@ def emulate_shortcuts(app_shortcuts, touch_input, event_code, active_modifiers, 
 
                     if key_code:
                         send_key_event(key_code, key_value)
+                    if command:
+                        execute_command(command)    
 
                     log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
                     return shortcut # Stop after first valid shortcut
@@ -772,8 +788,6 @@ def emulate_shortcuts(app_shortcuts, touch_input, event_code, active_modifiers, 
                     log.info(f"Shortcut {key_code} with value {key_value} requires {required_duration}s, but was held for {duration_held:.2f}s")
 
     return None
-    #log.info(f"No valid shortcut mapped for touch input: {touch_input} with modifiers {active_modifiers}")
-
 
 def send_key_event(key_code, key_value):
     global uinput_device
@@ -789,27 +803,29 @@ def send_key_event(key_code, key_value):
                     if c.type == EV_REL:
                         uinput_device.send_events([
                             InputEvent(c, v),
-                            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                            InputEvent(EV_SYN.SYN_REPORT, 0)
                         ])
             elif key_code:
                 for c in key_code:
                     if c.type == EV_KEY:
                         uinput_device.send_events([
                             InputEvent(c, 1),
-                            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                            InputEvent(EV_SYN.SYN_REPORT, 0)
                         ])
+                for c in key_code:
+                    if c.type == EV_KEY:
                         uinput_device.send_events([
                             InputEvent(c, 0),
-                            InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                            InputEvent(EV_SYN.SYN_REPORT, 0)
                         ])
         else:
             uinput_device.send_events([
                 InputEvent(key_code, 1),
-                InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                InputEvent(EV_SYN.SYN_REPORT, 0)
             ])
             uinput_device.send_events([
                 InputEvent(key_code, 0),
-                InputEvent(EV_SYN.SYN_REPORT, 0)  # Sync event
+                InputEvent(EV_SYN.SYN_REPORT, 0)
          ])
 
         log.info(f"Sent key {key_code, key_value}")
@@ -826,6 +842,8 @@ def activate_dialpad():
     send_value_to_touchpad_via_i2c("0x01")
 
     config_set(CONFIG_ENABLED, True)
+
+    #set_touchpad_prop_tap_to_click(false)
 
     dialpad = True
 
@@ -1124,6 +1142,10 @@ def listen_touchpad_events():
             center_activated = False
             window_binary = None
             treshold = None
+            first_touch_outside = None
+            angle_accumulator = 0.0
+            last_trigger_angle = None
+            last_angle = None
 
             for event in d_t.events():
 
@@ -1139,6 +1161,8 @@ def listen_touchpad_events():
                         within_top_right_icon = False  # Reset the flag
                         icon_activated = False  # Reset activation status
                         last_slice = None  # Reset the last slice
+                        angle_start = None
+                        angle_accumulator = 0.0
                         log.debug("Finger detected.")
 
                     elif event.value == 0:  # Finger up
@@ -1147,8 +1171,10 @@ def listen_touchpad_events():
                         within_top_right_icon = False  # Reset the flag
                         icon_activated = False  # Reset activation status
                         last_slice = None  # Reset the last slice
-                        log.debug("Finger lifted.")
+                        angle_start = None
+                        angle_accumulator = 0.0
                         touch_x, touch_y = None, None
+                        log.debug("Finger lifted.")
 
                         duration_held = time() - center_enter_time
                         if center_button_triggered:
@@ -1178,6 +1204,8 @@ def listen_touchpad_events():
                                                 send_to_socket({"value": value, "unit": value_unit, "title": title})
                                             else:
                                                 center_activated = False
+                                                send_to_socket({"input": "center", "value": 0, "title": title})
+                                                log.debug("Touch ended in center button area.")
                                     else:
                                         value = get_current_value(shortcut)
                                         value_unit = get_current_value_unit(shortcut)
@@ -1189,8 +1217,9 @@ def listen_touchpad_events():
                                         else:
                                             reset_center()
 
-                        if multi_app_mode and not center_activated and socket_enabled:
-                            send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
+                        if multi_app_mode and not center_activated:
+                            if socket_enabled:
+                                send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
 
                         # Re-enable tap-to-click
                         if tap_disabled:
@@ -1235,75 +1264,137 @@ def listen_touchpad_events():
                     distance = math.sqrt(dx**2 + dy**2)
                     angle = (math.atan2(dy, dx) * 180 / math.pi + 90) % 360
 
+                    if angle_start is None:
+                        angle_start = angle
+
                     if distance <= circle_radius and dialpad:
+
+                        first_touch_outside = True
 
                         # Disable tap-to-click
                         if not tap_disabled:
                             set_touchpad_prop_send_events(0)
                             tap_disabled = True
 
-                        #log.info("Distance: %f, Center button radius: %f", distance, center_button_radius)
-                        if distance < center_button_radius and dialpad:  # Center button area
-                            # Only trigger if it has not been triggered already in this touch cycle
+                        if distance < center_button_radius and dialpad:
+                            
                             if not center_button_triggered:
-                                log.debug("Touch detected in center button area.")
-                                send_to_socket({"input": "center", "value": 1, "title": title})
-                                center_enter_time = time()
-                                # Trigger the center button shortcut
-                                duration_held = time() - center_enter_time
 
-                                #if not multi_app_mode:
-                                    #shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
-                                    #if shortcut and socket_enabled:
-                                        #title = shortcut.get("title", None)
-                                        #send_to_socket({"input": "center", "value": 1, "title": title})
-                                        #send_to_socket({"input": "center", "value": 0, "title": title})
-                                center_button_triggered = True  # Set flag to indicate the button has been pressed
-                                icon_activated = True  # Ensure it only triggers once per touch
+                                log.debug("Touch detected in center button area. Title is: %s", title)
+
+                                if title:
+                                    send_to_socket({"input": "center", "value": 1, "title": title})
+                                    center_enter_time = time()
+                                    duration_held = time() - center_enter_time
+
+                                    center_button_triggered = True
+                                    icon_activated = True
                         else:
 
+                            # Reset the center button triggered flag if the finger leaves the circle (but not the button area)
+                            if center_button_triggered:
+                                center_button_triggered = False
+                                icon_activated = False
+                                center_enter_time = 0
+                                send_to_socket({"input": "center", "value": 0, "title": title})
+                                log.debug("Touch ended in center button area.")
+
                             if multi_app_mode and not center_activated:
+
                                 one_slice_angle = 360 / max(len(multi_app_mode_titles), slices_minimum_count)
+                                current_slice = int(angle // (one_slice_angle))
+
+                                if current_slice != last_slice or center_button_triggered:
+
+                                    if last_slice is None:
+                                        log.debug("Setting up the last_slice for first time.")
+                                        last_slice = current_slice
+                                    else:
+                                        pass
+
+                                    log.debug(
+                                        "TOUCH x=%d y=%d | center x=%d y=%d | dx=%d dy=%d | "
+                                        "angle=%.1f° | one slice angle=%.1f° | default_treshold=%.1f°",
+                                        touch_x, touch_y,
+                                        circle_center_x, circle_center_y,
+                                        touch_x - circle_center_x,
+                                        touch_y - circle_center_y,
+                                        angle,
+                                        one_slice_angle,
+                                        default_treshold
+                                    )
+
+                                    try:
+                                        title = multi_app_mode_titles[current_slice]
+                                    except:
+                                        title = None
+
+                                    if socket_enabled:
+                                        send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": title})
+                                            
+                                    last_slice = current_slice
                             else:
+
                                 try:
                                     treshold = app_specific_shortcuts[title]["treshold"]
-                                    one_slice_angle = treshold
                                 except:
-                                    # from the config
-                                    one_slice_angle = default_treshold
+                                    treshold = default_treshold
 
-                            # Determine the current slice based on the angle
-                            current_slice = int(angle // (one_slice_angle))
+                                # Initialize angles if needed
+                                if last_angle is None:
+                                    last_angle = angle
+                                    last_trigger_angle = angle
+                                    angle_accumulator = 0
+                                    last_logged_accumulator = 0
+                                    continue
 
-                            log.debug(
-                                "TOUCH x=%d y=%d | center x=%d y=%d | dx=%d dy=%d | "
-                                "angle=%.1f° | one slice angle (or treshold)=%.1f° | default_treshold=%.1f°",
-                                touch_x, touch_y,
-                                circle_center_x, circle_center_y,
-                                touch_x - circle_center_x,
-                                touch_y - circle_center_y,
-                                angle,
-                                one_slice_angle,
-                                default_treshold
-                            )
+                                # Compute delta for accumulator
+                                delta = angle - last_angle
+                                if delta > 180:
+                                    delta -= 360
+                                elif delta < -180:
+                                    delta += 360
 
-                            if current_slice != last_slice or center_button_triggered:
+                                angle_accumulator += delta
+                                last_angle = angle
 
-                                # Reset the center button triggered flag if the finger leaves the circle (but not the button area)
-                                if center_button_triggered:
-                                    center_button_triggered = False
-                                    icon_activated = False  # Allow the center button action to be triggered again
+                                # Log every ~5° of accumulator movement
+                                if 'last_logged_accumulator' not in locals():
+                                    last_logged_accumulator = angle_accumulator
 
-                                if last_slice is None:
-                                    last_slice = current_slice
-                                else:
-                                    pass
+                                acc_delta = abs(angle_accumulator - last_logged_accumulator)
+                                if acc_delta >= 5.0:
+                                    log.debug(
+                                        "ROTATE | angle=%.1f° | last_angle=%s | delta=%.2f° | acc=%.2f° | "
+                                        "start=%.1f | trigger_ref=%.1f | treshold=%.1f° | dir=%s | slice=%s | center=%s",
+                                        angle,
+                                        f"{last_angle:.1f}" if last_angle is not None else "None",
+                                        delta,
+                                        angle_accumulator,
+                                        angle_start if angle_start is not None else -1,
+                                        last_trigger_angle if last_trigger_angle is not None else -1,
+                                        treshold,
+                                        "CW" if angle_accumulator > 0 else "CCW",
+                                        last_slice,
+                                        center_button_triggered
+                                    )
+                                    last_logged_accumulator = angle_accumulator
 
-                                # Trigger rotation logic based on the direction
-                                if not multi_app_mode or center_activated:
-                                    # Determine the direction of rotation
-                                    direction = "clockwise" if (current_slice - last_slice) % one_slice_angle == 1 else "counterclockwise"
-                                    log.debug(f"Detected circular motion: {direction}")
+
+                                    if treshold >= socket_send_progress_above_treshold:
+                                        if socket_enabled:
+                                            progress_percent = max(min(angle_accumulator / treshold * 100, 100), -100)
+                                            send_to_socket({
+                                                "value_angle_start": angle_start,
+                                                "value": int(progress_percent),
+                                                "title": title,
+                                                "value_show_only_progress": True
+                                            })
+
+                                # Trigger threshold if accumulator exceeds it
+                                if abs(angle_accumulator) >= treshold:
+                                    direction = "clockwise" if angle_accumulator > 0 else "counterclockwise"
+                                    log.debug("Threshold crossed (%s), angle_accumulator=%.2f°", direction, angle_accumulator)
 
                                     general_value = None
                                     general_unit = None
@@ -1317,34 +1408,39 @@ def listen_touchpad_events():
 
                                     shortcut = emulate_shortcuts(sht, direction, event.value, active_modifiers)
                                     if shortcut and socket_enabled:
-
                                         value = get_current_value(shortcut)
-                                        if value is None and general_value:
-                                            value = general_value
-
                                         unit = get_current_value_unit(shortcut)
-                                        if unit is None and general_unit:
+
+                                        if value is None:
+                                            value = general_value
+                                        if unit is None:
                                             unit = general_unit
 
                                         try:
-                                            title = shortcut["title"]
-                                        except:
-                                            pass                                   
+                                            title = shortcut.get("title", title)
+                                        except Exception:
+                                            pass
 
-                                        send_to_socket({"input": direction, "value": value, "unit": unit, "title": title})
-                                else:
-                                    try:
-                                        title = multi_app_mode_titles[current_slice]
-                                    except:
-                                        # may be empty spot
-                                        title = None
+                                        if treshold >= socket_send_progress_above_treshold:
+                                            send_to_socket({
+                                                "value": 0,
+                                                "title": title,
+                                                "value_show_only_progress": True
+                                            })
+                                        else:
+                                            send_to_socket({
+                                                "input": direction,
+                                                "value": value,
+                                                "unit": unit,
+                                                "title": title
+                                            })
 
-                                    if socket_enabled:
-                                        send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": title})
-                                        
-                                last_slice = current_slice
+                                    # Reset accumulator after threshold, but do not move angle_start
+                                    angle_accumulator = 0
                     else:
-                        log.debug("Touch outside the circle. Ignoring.")
+                        if first_touch_outside:
+                            log.debug("Touch outside the circle for first time. Ignoring.")
+                            first_touch_outside = None
 
     except device.EventsDroppedException:
         for e in dev.sync(True):
@@ -1700,6 +1796,7 @@ def check_window():
         if update:
             send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
             center_activated = False
+            title = None
 
         sleep(0.5)
 
@@ -2005,7 +2102,7 @@ try:
     # init the device
     initialize_virtual_device()
 
-    if xdg_session_type == "wayland":
+    if xdg_session_type == "wayland" and PYWAYLAND_AVAILABLE:
         t = threading.Thread(target=load_keymap_listener_wayland)
         t.daemon = True
         threads.append(t)
@@ -2070,3 +2167,8 @@ finally:
     cleanup()
     log.info("Exiting")
     sys.exit(1)
+
+
+# TODO: ten postupný progres doladit, nfunguje start angle zdá se (chci, aby to bylo tak, že mi to označí všechno až na to co mi v tu chvíli chybí, mohlo by to vypadat dobře)
+
+# TODO: ukázka

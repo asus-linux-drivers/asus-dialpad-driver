@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0 (28.1.2026)
+
+### Fixed
+
+- Previously added `i2c` group as not a system by recreating
+- Missing dependency for NixOS `xcffib`
+- Removed wayland dependency from the `requirements.txt` because existence of `requirements.wayland.txt`
+
+### Feature
+
+- Init `treshold` and possibility to see (only) progress in UI up to `treshold` using `socket_send_progress_above_treshold`
+- Icons may be associated to `value` returned by command as alternation for sending keys
+
 ## 2.0.2 (16.1.2026)
 
 ### Fixed

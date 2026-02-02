@@ -39,7 +39,7 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
     elif command -v rpm-ostree >/dev/null 2>&1; then
         sudo rpm-ostree install systemd-devel python3-systemd
     elif command -v eopkg >/dev/null 2>&1; then
-        sudo eopkg install -y systemd-devel python3-systemd
+        sudo eopkg install -y systemd-devel python-systemd
     else
         echo "Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
     fi

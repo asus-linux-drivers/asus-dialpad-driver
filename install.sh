@@ -60,7 +60,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
 
     elif command -v yum >/dev/null 2>&1; then
         PACKAGE_MANAGER="yum"
-        sudo yum -y install ibus libevdev curl xinput i2c-tools python3-devel python3-virtualenv libxml2 libxkbcommon-devel gcc pkg-config
+        sudo yum -y install ibus libevdev curl xinput i2c-tools python3-devel virtualenv libxml2 libxkbcommon-devel gcc python-pkgconfig
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             sudo yum -y install wayland-devel
         fi

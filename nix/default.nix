@@ -1,13 +1,23 @@
 { lib
-, python311Packages
-, pkgs
+, python3Packages
+, ibus
+, libevdev
+, curl
+, xorg
+, i2c-tools
+, libxml2
+, libxkbcommon
 }:
-
-let
-  # Define the Python packages required
-  pythonPackages = pkgs.python311.withPackages (ps: with ps; [
+python3Packages.buildPythonApplication {
+  pname = "asus-dialpad-driver";
+  version = "2.1.0";
+  src = ../.;
+  
+  pyproject = false;
+  
+  dependencies = with python3Packages; [
     numpy
-    libevdev
+    python3Packages.libevdev
     xlib
     pyinotify
     pyasyncore
@@ -16,16 +26,9 @@ let
     systemd-python
     xcffib
     python-periphery
-  ]);
-in
-python311Packages.buildPythonPackage {
-  pname = "asus-dialpad-driver";
-  version = "2.1.0";
-  src = ../.;
+  ];
 
-  format = "other";
-
-  propagatedBuildInputs = with pkgs; [
+  buildInputs = [
     ibus
     libevdev
     curl
@@ -33,17 +36,7 @@ python311Packages.buildPythonPackage {
     i2c-tools
     libxml2
     libxkbcommon
-    libgcc
-    gcc
-    pythonPackages  # Python dependencies already include python311
   ];
-
-  doCheck = false;
-
-  # Skip build and just focus on copying files, no setuptools required
-  buildPhase = ''
-    echo "Skipping build phase since there's no setup.py"
-  '';
 
   # Install files for driver and layouts
   installPhase = ''
@@ -62,6 +55,11 @@ python311Packages.buildPythonPackage {
   preFixup = ''
     # Change line endings to Unix format
     sed -i 's/\r$//' $out/share/asus-dialpad-driver/dialpad.py
+  '';
+  
+  # Patch shebangs (defaults to files in $out/bin)
+  postFixup = ''
+    wrapPythonProgramsIn "$out/share/asus-dialpad-driver" "$out $pythonPath"
   '';
 
   meta = {

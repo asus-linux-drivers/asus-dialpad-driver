@@ -7,6 +7,7 @@
 , i2c-tools
 , libxml2
 , libxkbcommon
+, waylandSupport ? false
 }:
 python3Packages.buildPythonApplication {
   pname = "asus-dialpad-driver";
@@ -26,7 +27,7 @@ python3Packages.buildPythonApplication {
     systemd-python
     xcffib
     python-periphery
-  ];
+  ] ++ lib.optional waylandSupport [ python3Packages.pywayland ];
 
   buildInputs = [
     ibus

@@ -16,7 +16,7 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      default = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.default.override { waylandSupport = cfg.wayland; };
       description = "The package to use for the Asus DialPad Driver.";
     };
 

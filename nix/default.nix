@@ -11,7 +11,7 @@
 }:
 python3Packages.buildPythonApplication {
   pname = "asus-dialpad-driver";
-  version = "2.1.0";
+  version = "2.1.1";
   src = ../.;
   
   pyproject = false;

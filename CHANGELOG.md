@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.1 (11.2.2026)
+
+### Fixed
+
+- Support for NixOS (credits @SamueleFacenda)
+- Package names for `eopkg` / `yum` (credits @sHAKaJaada)
+
 ## 2.1.0 (28.1.2026)
 
 ### Fixed

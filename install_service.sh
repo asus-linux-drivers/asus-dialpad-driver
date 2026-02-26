@@ -7,7 +7,7 @@ if [ -z "$CONFIG_FILE_DIR_PATH" ]; then
     CONFIG_FILE_DIR_PATH="/usr/share/asus-dialpad-driver"
 fi
 if [ -z "$LAYOUT_NAME" ]; then
-    LAYOUT_NAME="default"
+    LAYOUT_NAME="asusvivobook16x"
 fi
 if [ -z "$LOGS_DIR_PATH" ]; then
     LOGS_DIR_PATH="/var/log/asus-dialpad-driver"

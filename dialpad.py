@@ -91,12 +91,14 @@ keymap_loaded = False
 listening_touchpad_events_started = False
 active_modifiers = set()
 modifiers = set()
+coactivator_modifiers = set()
 activation_lock = threading.Lock()
 multi_app_mode = None
 multi_app_mode_titles = None
 multi_app_mode_icons = None
 app_specific_shortcuts = {}
 app_name = None
+coactivator_keys = None
 
 if xdg_session_type == "x11":
     try:
@@ -442,6 +444,18 @@ def is_multifunction(app_config):
 
     return bool(len(non_standard_keys)), non_standard_keys, non_standard_keys_icons
 
+def load_evdev_keys_for_coactivator_modifiers(coactivator_keys):
+    global coactivator_modifiers
+
+    coactivator_modifiers.clear()
+    for coactivator_key_name in coactivator_keys:
+
+        coactivator_keysym_name = mod_name_to_specific_keysym_name(coactivator_key_name)
+        coactivator_evdev_key = get_keysym_name_associated_to_evdev_key_reflecting_current_layout()[coactivator_keysym_name]
+        coactivator_modifiers.add(coactivator_evdev_key)
+
+    log.debug("Loaded co-activator modifiers succesfully")
+
 def load_all_config_values():
     global config
     global disable_due_inactivity_time
@@ -456,6 +470,7 @@ def load_all_config_values():
     global multi_app_mode_titles
     global multi_app_mode_icons
     global socket_send_progress_above_treshold
+    global coactivator_modifiers
 
     #log.debug("load_all_config_values: config_lock.acquire will be called")
     config_lock.acquire()
@@ -470,7 +485,11 @@ def load_all_config_values():
     slices_minimum_count = int(config_get(CONFIG_SLICES_MINIMUM_COUNT, CONFIG_SLICES_MINIMUM_COUNT_DEFAULT))
     default_treshold = int(config_get(CONFIG_DEFAULT_TRESHOLD, CONFIG_DEFAULT_TRESHOLD_DEFAULT))
     suppress_app_specifics_shortcuts = int(config_get(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS, CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT))
+
     coactivator_keys = config_get(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY, CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT).strip().split()
+
+    load_evdev_keys_for_coactivator_modifiers(coactivator_keys)
+
     socket_enabled = config_get(CONFIG_SOCKET_ENABLED, CONFIG_SOCKET_ENABLED_DEFAULT)
     socket_send_progress_above_treshold = int(config_get(CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD, CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD_DEFAULT))
 
@@ -526,7 +545,7 @@ def send_value_to_touchpad_via_i2c(value):
     return False
 
 def initialize_virtual_device():
-    global uinput_device, dev, modifiers
+    global udev, dev, modifiers
 
     try:
         # create the virtual device
@@ -578,7 +597,7 @@ def initialize_virtual_device():
                         process_config(config)
 
         # create the uinput device
-        uinput_device = dev.create_uinput_device()
+        udev = dev.create_uinput_device()
         log.info("Virtual device initialized successfully.")
 
         sleep(0.5)
@@ -1030,21 +1049,21 @@ def set_touchpad_prop_send_events(value):
 
 def are_modifier_keys_pressed(modifier_names):
 
-    global display, keyboard_state, xkb_conn
-    
+    global display, keyboard_state, xkb_conn, active_modifiers
+
     if not modifier_names:
         return True
 
     # wayland
     if keyboard_state:
+
         try:
             for modifier_name in modifier_names:
-                #modifier_keysym = mod_name_to_specific_keysym_name(modifier_name)  
-                idx = keyboard_state.keymap.mod_get_index(modifier_name)
-                if idx >= 0 and not keyboard_state.mod_index_is_active(idx, xkb.StateComponent.XKB_STATE_MODS_DEPRESSED):
-                    log.debug("Modifier %s not pressed (wayland xkb)", modifier_name)
+                modifier_keysym_name = mod_name_to_specific_keysym_name(modifier_name)
+                modifier_evdev_key = load_evdev_key_for_wayland(modifier_keysym_name, keyboard_state)
+                if modifier_evdev_key not in active_modifiers:
                     return False
-        except Exception:
+        except:
             pass
 
     # x11
@@ -1594,7 +1613,7 @@ def listen_keyboard_events():
     """
     Listen for keyboard events to track active modifier keys.
     """
-    global active_modifiers, modifiers, keyboard
+    global active_modifiers, modifiers, coactivator_modifiers, keyboard
 
     if keyboard is None:
         log.warning("No keyboard detected; skipping keyboard listener.")
@@ -1607,7 +1626,7 @@ def listen_keyboard_events():
         d_k = Device(fd_k)
 
         for event in d_k.events():
-            if event.code in modifiers:
+            if event.code in modifiers or event.code in coactivator_modifiers:
 
                 if event.value == 1:  # Key Pressed
                     active_modifiers.add(event.code)
@@ -1647,6 +1666,8 @@ def set_defaults_keysym_name_associated_to_evdev_key_reflecting_current_layout()
         # unicode shortcut - start sequence
         mod_name_to_specific_keysym_name('Shift'): '',
         mod_name_to_specific_keysym_name('Control'): '',
+        # possible co-activator key (together with Shift and Control above)
+        mod_name_to_specific_keysym_name('Alt'): '',
         'u': '',
         # unicode shortcut - end sequence
         'space': ''
@@ -1721,7 +1742,7 @@ def load_evdev_key_for_wayland(char, keyboard_state):
                         return key
 
 def wl_load_keymap_state():
-    global keyboard_state, keymap_loaded, udev
+    global keyboard_state, keymap_loaded, coactivator_keys, udev
 
     log.debug("Wayland will try to load keymap")
 
@@ -1740,6 +1761,8 @@ def wl_load_keymap_state():
 
     log.debug("Wayland loaded keymap succesfully")
     log.debug(get_keysym_name_associated_to_evdev_key_reflecting_current_layout())
+
+    load_evdev_keys_for_coactivator_modifiers(coactivator_keys)
 
 def extract_icons(app_specific_shortcuts):
     icons = {}
@@ -1768,7 +1791,7 @@ def check_window():
 
     while not stop_threads:
         window_binary_local, window_title = get_active_window_title()
-        app_name_local, app_specific_shortcuts = get_appropriate_app_name_and_shortcuts(window_binary, window_title)
+        app_name_local, app_specific_shortcuts = get_appropriate_app_name_and_shortcuts(window_binary_local, window_title)
         multi_app_mode_local, multi_app_mode_titles_local, multi_app_mode_icons_local = is_multifunction(app_specific_shortcuts)
 
         update = False
@@ -2096,6 +2119,7 @@ def load_keymap_listener_x11():
       os.kill(os.getpid(), signal.SIGUSR1)
 
 try:
+
     # init the socket
     init_socket()
 
@@ -2158,7 +2182,7 @@ try:
     t.daemon = True
     threads.append(t)
     t.start()
-    
+
     # Start the touchpad listener in a separate thread
     listen_touchpad_events()
 except Exception:

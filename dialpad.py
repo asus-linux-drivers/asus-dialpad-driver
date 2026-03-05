@@ -2167,8 +2167,3 @@ finally:
     cleanup()
     log.info("Exiting")
     sys.exit(1)
-
-
-# TODO: ten postupný progres doladit, nfunguje start angle zdá se (chci, aby to bylo tak, že mi to označí všechno až na to co mi v tu chvíli chybí, mohlo by to vypadat dobře)
-
-# TODO: ukázka

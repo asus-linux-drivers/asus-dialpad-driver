@@ -57,6 +57,13 @@ try:
 except ImportError:
     pass
 
+PYATSPI_AVAILABLE = False
+try:
+    import pyatspi
+    PYATSPI_AVAILABLE = True
+except ImportError:
+    pass
+
 QDBUS = shutil.which("qdbus") or shutil.which("qdbus6")
 
 # Logging setup
@@ -1776,42 +1783,48 @@ def pad_to_minimum(arr, minimum):
         arr = []
     return arr + [None] * max(0, minimum - len(arr))
 
+def window_was_changed(window_binary_local):
+    global stop_threads, window_binary, window_title, app_name, app_specific_shortcuts, multi_app_mode, multi_app_mode_titles, multi_app_mode_icons,\
+        center_activated, title
+
+    app_name_local, app_specific_shortcuts = get_appropriate_app_name_and_shortcuts(window_binary_local, window_title)
+    multi_app_mode_local, multi_app_mode_titles_local, multi_app_mode_icons_local = is_multifunction(app_specific_shortcuts)
+
+    update = False
+
+    if window_binary_local != window_binary:
+        window_binary = window_binary_local
+        update = True
+
+    if app_name_local != app_name:
+        app_name = app_name_local
+        update = True
+
+    if multi_app_mode_local != multi_app_mode:
+        multi_app_mode = multi_app_mode_local
+        update = True
+
+    if multi_app_mode_titles_local != pad_to_minimum(multi_app_mode_titles, slices_minimum_count):
+        multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles_local, slices_minimum_count)
+        update = True
+
+    if multi_app_mode_icons_local != pad_to_minimum(multi_app_mode_icons, slices_minimum_count):
+        multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons_local, slices_minimum_count)
+        update = True
+
+    if update:
+        send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
+        center_activated = False
+        title = None
+
+
 def check_window():
     global stop_threads, window_binary, window_title, app_name, app_specific_shortcuts, multi_app_mode, multi_app_mode_titles, multi_app_mode_icons,\
         center_activated, title
 
     while not stop_threads:
         window_binary_local, window_title = get_active_window_title()
-        app_name_local, app_specific_shortcuts = get_appropriate_app_name_and_shortcuts(window_binary_local, window_title)
-        multi_app_mode_local, multi_app_mode_titles_local, multi_app_mode_icons_local = is_multifunction(app_specific_shortcuts)
-
-        update = False
-
-        if window_binary_local != window_binary:
-            window_binary = window_binary_local
-            update = True
-
-        if app_name_local != app_name:
-            app_name = app_name_local
-            update = True
-
-        if multi_app_mode_local != multi_app_mode:
-            multi_app_mode = multi_app_mode_local
-            update = True
-
-        if multi_app_mode_titles_local != pad_to_minimum(multi_app_mode_titles, slices_minimum_count):
-            multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles_local, slices_minimum_count)
-            update = True
-
-        if multi_app_mode_icons_local != pad_to_minimum(multi_app_mode_icons, slices_minimum_count):
-            multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons_local, slices_minimum_count)
-            update = True
-
-        if update:
-            send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
-            center_activated = False
-            title = None
-
+        window_was_changed(window_binary_local)
         sleep(0.5)
 
 
@@ -2109,6 +2122,49 @@ def load_keymap_listener_x11():
       log.exception("X11 load keymap listener error. Exiting")
       os.kill(os.getpid(), signal.SIGUSR1)
 
+last_app = None
+
+def _extract_app_info(acc):
+    try:
+        app = acc.getApplication()
+        app_name = app.name if app else None
+        title = acc.name
+        return app_name, title
+    except Exception:
+        return None, None
+
+def on_window_activated(event):
+    global window_title, last_app
+
+    try:
+        # only activation event
+        if event.detail1 != 1:
+            return
+
+        acc = event.source
+        app_name_local, window_title = _extract_app_info(acc)
+
+        if not app_name_local:
+            return
+
+        # deduplication
+        if app_name_local == last_app:
+            return
+
+        last_app = app_name_local
+
+        window_was_changed(app_name_local)
+    except Exception:
+        pass
+        
+def check_window_pyatspi():
+    pyatspi.Registry.registerEventListener(
+        on_window_activated,
+        "object:state-changed:active",
+    )
+
+    pyatspi.Registry.start()
+
 try:
 
     # init the socket
@@ -2169,10 +2225,22 @@ try:
     threads.append(t)
     t.start()
 
-    t = threading.Thread(target=check_window)
-    t.daemon = True
-    threads.append(t)
-    t.start()
+    desktop_by_pyatspi = None
+    try:
+        desktop_by_pyatspi = pyatspi.Registry.getDesktop(0)
+    except:
+        pass
+
+    if PYATSPI_AVAILABLE and desktop_by_pyatspi:
+        t = threading.Thread(target=check_window_pyatspi)
+        t.daemon = True
+        threads.append(t)
+        t.start()
+    else:
+        t = threading.Thread(target=check_window)
+        t.daemon = True
+        threads.append(t)
+        t.start()
 
     # Start the touchpad listener in a separate thread
     listen_touchpad_events()

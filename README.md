@@ -137,12 +137,33 @@ or customized install:
 INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
 LOGS_DIR_PATH="/var/log/asus-dialpad-driver" # only for install and uninstall logs
 INSTALL_UDEV_DIR_PATH="/usr/lib/udev"
-
-# e.g. for BazziteOS (https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/198)
-$ INSTALL_DIR_PATH="/home/$USER/.local/share/asus-dialpad-driver"\
-INSTALL_UDEV_DIR_PATH="/etc/udev"\
-bash install.sh
 ```
+
+### Installation on Immutable Systems (BazziteOS, Fedora Silverblue, Kinoite)
+
+For immutable Linux distributions, use custom paths and expect two reboots:
+
+```bash
+# First run - installs system packages
+$ INSTALL_DIR_PATH="/home/$USER/.local/share/asus-dialpad-driver" \
+  INSTALL_UDEV_DIR_PATH="/etc/udev" \
+  bash install.sh
+
+# Reboot when prompted (required for package layering)
+$ systemctl reboot
+
+# Second run - completes driver installation
+$ INSTALL_DIR_PATH="/home/$USER/.local/share/asus-dialpad-driver" \
+  INSTALL_UDEV_DIR_PATH="/etc/udev" \
+  bash install.sh
+
+# Final reboot (required for group membership)
+$ systemctl reboot
+```
+
+**Why two reboots?** Immutable systems require a reboot after layering packages and another after group membership changes.
+
+---
 
 or run separately parts of the install script.
 

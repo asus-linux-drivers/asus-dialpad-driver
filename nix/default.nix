@@ -33,7 +33,7 @@ python3Packages.buildPythonApplication {
     ibus
     libevdev
     curl
-    xorg.xinput
+    xinput
     i2c-tools
     libxml2
     libxkbcommon

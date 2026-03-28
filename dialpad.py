@@ -958,10 +958,18 @@ def qdbusSet(cmd):
 
     if qdbus_failure_count < qdbus_max_failure_count:
         try:
-            ret = subprocess.call(cmd)
+            sudo_user = os.environ.get('SUDO_USER')
+
+            if sudo_user is not None:
+                final_cmd = ['runuser', '-u', sudo_user] + cmd
+            else:
+                final_cmd = cmd
+
+            log.debug(final_cmd)
+            ret = subprocess.call(final_cmd)
 
             if ret != 0:
-                raise subprocess.CalledProcessError(ret, cmd)
+                raise subprocess.CalledProcessError(ret, final_cmd)
 
         except Exception as e:
             log.debug(e, exc_info=True)

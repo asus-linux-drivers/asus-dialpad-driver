@@ -606,33 +606,6 @@ def initialize_virtual_device():
         log.error(f"Error initializing virtual device: {e}")
         sys.exit(1)
 
-def get_window_kde_wayland_title(window_id):
-    try:
-        cmd = [QDBUS, 'org.kde.KWin', f'/org/kde/KWin/Window/{window_id}', 'org.kde.KWin.Window.caption']
-        output = subprocess.check_output(cmd).decode().strip()
-        return output
-    except Exception as e:
-        log.error("Error getting KDE window title: %s", e)
-        return None
-
-def get_active_window_kde_wayland_title_using_qdbus():
-    global qdbus_failure_count, qdbus_max_failure_count
-
-    if qdbus_failure_count >= qdbus_max_failure_count:
-        return None
-
-    try:
-        cmd = [QDBUS, 'org.kde.KWin', '/KWin', 'org.kde.KWin.activeWindow']
-        output = subprocess.check_output(cmd).decode().strip()
-        match = re.search(r"(\d+)", output)
-        if match:
-            window_id = match.group(1)
-            return get_window_kde_wayland_title(window_id)
-    except Exception as e:
-        qdbus_failure_count += 1
-        log.error("QDbus KDE title fetch failed (%d/%d): %s", qdbus_failure_count, qdbus_max_failure_count, e)
-        return None
-
 def get_active_window_gnome_wayland_title():
     global gnome_failure_count, gnome_max_failure_count
 
@@ -685,7 +658,27 @@ def get_active_window_info_x11():
         log.error("Error retrieving active window info (X11): %s", e)
         return None, None
 
+gsettings_failure_count = 0
+gsettings_max_failure_count = 1
+
+qdbus_failure_count = 0
+qdbus_max_failure_count = 1
+
+gnome_failure_count = 0
+gnome_max_failure_count = 1
+
+xinput_failure_count = 0
+xinput_max_failure_count = 1
+
+synclient_status_failure_count = 0
+synclient_status_max_failure_count = 1
+
 def get_active_window_info_kde_wayland():
+    global qdbus_failure_count, qdbus_max_failure_count
+
+    if qdbus_failure_count >= qdbus_max_failure_count:
+        return None, None
+
     try:
         win_id = subprocess.check_output([
             QDBUS, 'org.kde.KWin', '/KWin', 'org.kde.KWin.activeWindow'
@@ -708,7 +701,13 @@ def get_active_window_info_kde_wayland():
         return binary, title
 
     except Exception as e:
-        log.error("Error retrieving active window info (KDE Wayland): %s", e)
+        qdbus_failure_count += 1
+        log.error(
+            "KDE Wayland window fetch failed (%d/%d): %s",
+            qdbus_failure_count,
+            qdbus_max_failure_count,
+            e
+        )
         return None, None
 
 def get_active_window_info_gnome_wayland():
@@ -936,22 +935,6 @@ def check_dialpad_automatical_disable_or_idle_due_inactivity():
             log.info("DialPad deactivated")
 
         sleep(1)
-
-
-gsettings_failure_count = 0
-gsettings_max_failure_count = 1
-
-qdbus_failure_count = 0
-qdbus_max_failure_count = 1
-
-gnome_failure_count = 0
-gnome_max_failure_count = 1
-
-xinput_failure_count = 0
-xinput_max_failure_count = 1
-
-synclient_status_failure_count = 0
-synclient_status_max_failure_count = 1
 
 def qdbusSet(cmd):
     global qdbus_failure_count, qdbus_max_failure_count

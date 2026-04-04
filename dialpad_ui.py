@@ -47,7 +47,7 @@ class FloatingWindow(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(BOX_WIDTH, BOX_HEIGHT)
 

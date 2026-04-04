@@ -743,8 +743,8 @@ def get_active_window_info_niri():
         ).decode().strip()
         win = json.loads(out)
         title = win.get('title')
-        app_id = win.get('app_id')
-        binary = shutil.which(app_id) if app_id else None
+        pid = win.get('pid')
+        binary = binary_from_pid(pid) if pid else None
         return binary, title
     except Exception as e:
         niri_failure_count += 1

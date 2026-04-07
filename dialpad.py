@@ -629,7 +629,7 @@ def get_active_window_gnome_wayland_title():
         return active_window.get('title', None)
     except Exception as e:
         gnome_failure_count += 1
-        log.error("GNOME window title fetch failed (%d/%d): %s", gnome_failure_count, gnome_max_failure_count, e)
+        log.debug("GNOME window title fetch failed (%d/%d): %s", gnome_failure_count, gnome_max_failure_count, e)
         return None
 
 def binary_from_pid(pid):
@@ -665,7 +665,7 @@ def get_active_window_info_x11():
         return binary, title
 
     except Exception as e:
-        log.error("Error retrieving active window info (X11): %s", e)
+        log.debug("Error retrieving active window info (X11): %s", e)
         return None, None
 
 gsettings_failure_count = 0
@@ -721,7 +721,7 @@ def get_active_window_info_kde_wayland():
 
     except Exception as e:
         qdbus_failure_count += 1
-        log.error(
+        log.debug(
             "KDE Wayland window fetch failed (%d/%d): %s",
             qdbus_failure_count,
             qdbus_max_failure_count,
@@ -1128,7 +1128,7 @@ def set_touchpad_prop_send_events(value):
             return
         except:
             xinput_failure_count+=1
-            log.error('Setting libinput Send Events via xinput failed')
+            log.debug('Setting libinput Send Events via xinput failed')
 
     # 3. priority - synclient
     if synclient_status_failure_count > synclient_status_max_failure_count:

@@ -175,7 +175,6 @@ app_shortcuts = getattr(model_layout, "app_shortcuts", {})
 # Figure out devices from devices file
 touchpad: Optional[str] = None
 touchpad_name: Optional[str] = None
-touchpad_sysfs: Optional[str] = None
 device_id: Optional[str] = None
 keyboard_device_id: Optional[str] = None
 device_addr: Optional[int] = None
@@ -216,8 +215,6 @@ while try_times > 0:
                 if "S: " in line:
                     # search device id
                     device_id = re.sub(r".*i2c-(\d+)/.*$", r'\1', line).replace("\n", "")
-                    sysfs_path = line.strip().replace("S: Sysfs=", "")
-                    touchpad_sysfs = f"/sys{sysfs_path}/inhibited"
                     log.info('Set touchpad device id %s from %s', device_id, line.strip())
 
                 if "H: " in line:
@@ -1104,7 +1101,7 @@ def gsettingsSetTouchpadSendEvents(value):
     gsettingsSet('org.gnome.desktop.peripherals.touchpad', 'send-events', 'enabled' if value else 'disabled')
 
 def set_touchpad_prop_send_events(value):
-    global touchpad_name, touchpad_sysfs, gsettings_failure_count, gsettings_max_failure_count, qdbus_max_failure_count, qdbus_failure_count, xinput_failure_count, xinput_max_failure_count, synclient_status_failure_count, synclient_status_max_failure_count
+    global touchpad_name, gsettings_failure_count, gsettings_max_failure_count, qdbus_max_failure_count, qdbus_failure_count, xinput_failure_count, xinput_max_failure_count, synclient_status_failure_count, synclient_status_max_failure_count
 
     # 1. priority - gsettings (gnome) or qdbus (kde)
     if gsettings_failure_count < gsettings_max_failure_count:

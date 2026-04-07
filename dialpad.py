@@ -1223,6 +1223,8 @@ def reset_center():
     title = None
     treshold = None
 
+window_binary = None
+
 def listen_touchpad_events():
     global slices_minimum_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys, title, treshold, multi_app_mode_titles, app_specific_shortcuts, window_binary
 
@@ -1254,7 +1256,6 @@ def listen_touchpad_events():
             center_enter_time = 0
             title = None
             center_activated = False
-            window_binary = None
             treshold = None
             first_touch_outside = None
             angle_accumulator = 0.0
@@ -2329,6 +2330,11 @@ try:
         pass
 
     if PYATSPI_AVAILABLE and desktop_by_pyatspi:
+        # for current window
+        window_binary_local, window_title = get_active_window_title()
+        window_was_changed(window_binary_local)
+
+        # then listen for window change event
         t = threading.Thread(target=check_window_pyatspi)
         t.daemon = True
         threads.append(t)

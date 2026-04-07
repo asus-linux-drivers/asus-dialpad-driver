@@ -175,6 +175,7 @@ app_shortcuts = getattr(model_layout, "app_shortcuts", {})
 # Figure out devices from devices file
 touchpad: Optional[str] = None
 touchpad_name: Optional[str] = None
+touchpad_sysfs: Optional[str] = None
 device_id: Optional[str] = None
 keyboard_device_id: Optional[str] = None
 device_addr: Optional[int] = None
@@ -215,6 +216,8 @@ while try_times > 0:
                 if "S: " in line:
                     # search device id
                     device_id = re.sub(r".*i2c-(\d+)/.*$", r'\1', line).replace("\n", "")
+                    sysfs_path = line.strip().replace("S: Sysfs=", "")
+                    touchpad_sysfs = f"/sys{sysfs_path}/inhibited"
                     log.info('Set touchpad device id %s from %s', device_id, line.strip())
 
                 if "H: " in line:
@@ -680,6 +683,15 @@ xinput_max_failure_count = 1
 synclient_status_failure_count = 0
 synclient_status_max_failure_count = 1
 
+niri_failure_count = 0
+niri_max_failure_count = 1
+
+sway_failure_count = 0
+sway_max_failure_count = 1
+
+hyprland_failure_count = 0
+hyprland_max_failure_count = 1
+
 def get_active_window_info_kde_wayland():
     global qdbus_failure_count, qdbus_max_failure_count
 
@@ -721,6 +733,82 @@ def get_active_window_info_gnome_wayland():
     title = get_active_window_gnome_wayland_title()
     return None, title
 
+def get_active_window_info_niri():
+    global niri_failure_count, niri_max_failure_count
+
+    if niri_failure_count >= niri_max_failure_count:
+        return None, None
+
+    try:
+        out = subprocess.check_output(
+            ['niri', 'msg', '--json', 'focused-window'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        win = json.loads(out)
+        title = win.get('title')
+        pid = win.get('pid')
+        binary = binary_from_pid(pid) if pid else None
+        return binary, title
+    except Exception as e:
+        niri_failure_count += 1
+        log.debug("niri window fetch failed (%d/%d): %s", niri_failure_count, niri_max_failure_count, e)
+        return None, None
+
+def get_active_window_info_sway():
+    global sway_failure_count, sway_max_failure_count
+
+    if sway_failure_count >= sway_max_failure_count:
+        return None, None
+
+    try:
+        out = subprocess.check_output(
+            ['swaymsg', '-t', 'get_tree'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        tree = json.loads(out)
+
+        def find_focused(node):
+            if node.get('focused'):
+                return node
+            for child in node.get('nodes', []) + node.get('floating_nodes', []):
+                result = find_focused(child)
+                if result:
+                    return result
+            return None
+
+        focused = find_focused(tree)
+        if focused:
+            title = focused.get('name')
+            pid = focused.get('pid')
+            binary = binary_from_pid(pid) if pid else None
+            return binary, title
+        return None, None
+    except Exception as e:
+        sway_failure_count += 1
+        log.debug("sway window fetch failed (%d/%d): %s", sway_failure_count, sway_max_failure_count, e)
+        return None, None
+
+def get_active_window_info_hyprland():
+    global hyprland_failure_count, hyprland_max_failure_count
+
+    if hyprland_failure_count >= hyprland_max_failure_count:
+        return None, None
+
+    try:
+        out = subprocess.check_output(
+            ['hyprctl', 'activewindow', '-j'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        win = json.loads(out)
+        title = win.get('title')
+        pid = win.get('pid')
+        binary = binary_from_pid(pid) if pid else None
+        return binary, title
+    except Exception as e:
+        hyprland_failure_count += 1
+        log.debug("Hyprland window fetch failed (%d/%d): %s", hyprland_failure_count, hyprland_max_failure_count, e)
+        return None, None
+
 def get_active_window_title():
 
     if xdg_session_type == "x11" and display:
@@ -736,7 +824,19 @@ def get_active_window_title():
         if title:
             return binary, title
 
-    log.error("Unsupported session type or display not connected.")
+        binary, title = get_active_window_info_niri()
+        if binary or title:
+            return binary, title
+
+        binary, title = get_active_window_info_sway()
+        if binary or title:
+            return binary, title
+
+        binary, title = get_active_window_info_hyprland()
+        if binary or title:
+            return binary, title
+
+    log.debug("Unsupported session type or display not connected.")
 
     return None, None
 
@@ -1004,7 +1104,7 @@ def gsettingsSetTouchpadSendEvents(value):
     gsettingsSet('org.gnome.desktop.peripherals.touchpad', 'send-events', 'enabled' if value else 'disabled')
 
 def set_touchpad_prop_send_events(value):
-    global touchpad_name, gsettings_failure_count, gsettings_max_failure_count, qdbus_max_failure_count, qdbus_failure_count, xinput_failure_count, xinput_max_failure_count, synclient_status_failure_count, synclient_status_max_failure_count
+    global touchpad_name, touchpad_sysfs, gsettings_failure_count, gsettings_max_failure_count, qdbus_max_failure_count, qdbus_failure_count, xinput_failure_count, xinput_max_failure_count, synclient_status_failure_count, synclient_status_max_failure_count
 
     # 1. priority - gsettings (gnome) or qdbus (kde)
     if gsettings_failure_count < gsettings_max_failure_count:

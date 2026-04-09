@@ -35,7 +35,7 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 
 ## Features
 
-- Driver during installation collects anonymous data with goal improve driver (e.g. automatic layout detection; data are publicly available [here](https://lookerstudio.google.com/s/gaK2TftgZqM), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
+- Driver during installation collects anonymous data with goal improve driver (e.g. automatic layout detection or [for kernel driver development](https://lookerstudio.google.com/u/0/reporting/a9ed8ed9-a0d7-42bd-96e9-57daed8697b1/page/p_e0hnu8md0d); data are publicly available [here](https://lookerstudio.google.com/s/gaK2TftgZqM), you can provide used config using `$ bash install_config_send_anonymous_report.sh`)
 - Driver (including backlighting if hardware supported) installed for the current user
 - Driver creates own virtual environment of currently installed version of `Python3`
 - Multiple pre-created [DialPad layouts](https://github.com/asus-linux-drivers/asus-dialpad-driver#layouts) with the possibility of [creating custom layouts or improving existing ones (circle_diameter, center_button_diameter, circle_center_x..)](https://github.com/asus-linux-drivers/asus-dialpad-driver#keyboard-layout)

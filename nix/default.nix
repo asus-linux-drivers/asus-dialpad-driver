@@ -28,7 +28,6 @@ python3Packages.buildPythonApplication {
     xlib
     pyinotify
     pyasyncore
-    pywayland
     xkbcommon
     systemd-python
     xcffib

@@ -208,7 +208,8 @@ This repo contains a Flake that exposes a NixOS Module that manages and offers o
     inputs = {
         # ---Snip---
         asus-dialpad-driver = {
-          url = "github:asus-linux-drivers/asus-dialpad-driver";
+          url = "github:asus-linux-drivers/asus-dialpad-driver/v2.1.1"; # use this line for the latest release of stable version
+          # url = "github:asus-linux-drivers/asus-dialpad-driver"; # or this line for using master branch with the latest changes which may be not stable
           inputs.nixpkgs.follows = "nixpkgs";
         };
         # ---Snip---

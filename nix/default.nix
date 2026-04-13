@@ -1,4 +1,5 @@
 { lib
+, pkgs
 , python3Packages
 , ibus
 , libevdev
@@ -9,6 +10,11 @@
 , libxkbcommon
 , waylandSupport ? false
 }:
+
+let
+  compat = import ./compat.nix { inherit pkgs; };
+in
+
 python3Packages.buildPythonApplication {
   pname = "asus-dialpad-driver";
   version = "2.1.1";
@@ -33,7 +39,7 @@ python3Packages.buildPythonApplication {
     ibus
     libevdev
     curl
-    xinput
+    compat.xinput
     i2c-tools
     libxml2
     libxkbcommon

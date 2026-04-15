@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.2.0 (15.4.2026)
+
+### Fixed
+
+- Adding adding `uinput` group on BazziteOS
+- Deprecated `xorg.xinput` to `xinput` for the next stable release of NixOS (credits @jalbstmeijer @MeeSumee)
+- Default layout name and missing `INSTALL_DIR_PATH` when using `install_service.sh `independently without overriding from cmd
+- Missing `SUDO_USER` on `qdbusSet` function
+- Missing anti-repeating failure mechanism for `QDBUS`
+- UI window from stealing focus on Wayland (credits @junjzhang)
+- Duplication of `pywayland` dependency for NixOS
+
+### Feature
+
+- Added support for Wayland/X11 on Gnome using `pyatspi`
+- Added support for wlroots-based Wayland compositors niri, sway and Hyprland (credits @junjzhang)
+- Added support for immutable systems BazziteOS, Fedora Silverblue and Kinoite (credits @VictorPrado99)
+
 ## 2.1.1 (11.2.2026)
 
 ### Fixed

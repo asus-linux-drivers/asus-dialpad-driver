@@ -3,7 +3,7 @@
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 ![Maintainer](https://img.shields.io/badge/maintainer-ldrahnik-blue)
 [![GitHub Release](https://img.shields.io/github/release/asus-linux-drivers/asus-dialpad-driver.svg?style=flat)](https://github.com/asus-linux-drivers/asus-dialpad-driver/releases)
-[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v2.1.1.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
+[![GitHub commits](https://img.shields.io/github/commits-since/asus-linux-drivers/asus-dialpad-driver/v2.2.0.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/commit/)
 [![GitHub issues-closed](https://img.shields.io/github/issues-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://GitHub.com/asus-linux-drivers/asus-dialpad-driver/issues?q=is%3Aissue+is%3Aclosed)
 [![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed/asus-linux-drivers/asus-dialpad-driver.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/compare)
 [![Ask Me Anything !](https://img.shields.io/badge/Ask%20about-anything-1abc9c.svg)](https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/new/choose)
@@ -127,7 +127,7 @@ $ git clone https://github.com/asus-linux-drivers/asus-dialpad-driver
 $ cd asus-dialpad-driver
 # now you are using master branch with the latest changes which may be not stable
 # jump to the latest release of stable version:
-$ git checkout v2.0.1
+$ git checkout v2.2.0
 ```
 
 or customized install:
@@ -208,7 +208,7 @@ This repo contains a Flake that exposes a NixOS Module that manages and offers o
     inputs = {
         # ---Snip---
         asus-dialpad-driver = {
-          url = "github:asus-linux-drivers/asus-dialpad-driver/v2.1.1"; # use this line for the latest release of stable version
+          url = "github:asus-linux-drivers/asus-dialpad-driver/v2.2.0"; # use this line for the latest release of stable version
           # url = "github:asus-linux-drivers/asus-dialpad-driver"; # or this line for using master branch with the latest changes which may be not stable
           inputs.nixpkgs.follows = "nixpkgs";
         };

@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Adding adding `uinput` group on BazziteOS
+- Adding `uinput` group on BazziteOS
 - Deprecated `xorg.xinput` to `xinput` for the next stable release of NixOS (credits @jalbstmeijer @MeeSumee)
 - Default layout name and missing `INSTALL_DIR_PATH` when using `install_service.sh `independently without overriding from cmd
 - Missing `SUDO_USER` on `qdbusSet` function

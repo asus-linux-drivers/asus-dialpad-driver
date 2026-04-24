@@ -31,7 +31,7 @@ if [[ $(type /usr/sbin/i2cdetect 2>/dev/null) ]] && [[ $(type /usr/sbin/i2ctrans
             break
         elif [ -z "$I2C_TEST_38" ]; then
             echo "success (adr 0x38)"
-            DEVICE_ADDRESS=15
+            DEVICE_ADDRESS=38
             TOUCHPAD_WITH_DIALPAD_DETECTED=true
             break
         else

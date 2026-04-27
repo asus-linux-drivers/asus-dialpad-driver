@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1 (27.4.2026)
+
+### Fixed
+
+- Device detection during install process
+
 ## 2.2.0 (15.4.2026)
 
 ### Fixed

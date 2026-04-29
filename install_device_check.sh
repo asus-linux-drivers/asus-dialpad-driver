@@ -85,7 +85,17 @@ if command -v /usr/sbin/i2cdetect >/dev/null 2>&1 && command -v /usr/sbin/i2ctra
 
     if [ -z "$TOUCHPAD_WITH_DIALPAD_DETECTED" ]; then
         echo "The detection was not successful. Touchpad with DialPad not found. Check whether your touchpad has integrated DialPad (e.g. on product websites) and in case it has then eventually create an issue here https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/new/choose."
-        exit 1
+
+        read -p "Do you want try to continue anyway? [y/N]: " CONTINUE
+
+        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+
+            echo
+
+            source install_send_anonymous_dsdt_table.sh
+
+            exit 1
+        fi
     fi
 else
     echo "The i2cdetect or i2ctransfer tool not found to proceed initial test whether any i2c device react like DialPad"

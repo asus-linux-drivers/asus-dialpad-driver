@@ -454,6 +454,9 @@ def is_multifunction(app_config):
 def load_evdev_keys_for_coactivator_modifiers(coactivator_keys):
     global coactivator_modifiers
 
+    if not coactivator_keys:
+        return
+
     coactivator_modifiers.clear()
     for coactivator_key_name in coactivator_keys:
 
@@ -2141,7 +2144,7 @@ def reset_udev_device():
     sleep(0.5)
 
 def load_evdev_keys_for_x11():
-  global enabled_evdev_keys, keymap_loaded, udev
+  global enabled_evdev_keys, keymap_loaded, coactivator_keys, udev
 
   log.debug("X11 will try to load keymap")
 
@@ -2160,6 +2163,8 @@ def load_evdev_keys_for_x11():
 
   log.debug("X11 loaded keymap succesfully")
   log.debug(get_keysym_name_associated_to_evdev_key_reflecting_current_layout())
+
+  load_evdev_keys_for_coactivator_modifiers(coactivator_keys)
 
 def wl_keyboard_keymap_handler(keyboard, format_, fd, size):
     global keyboard_state

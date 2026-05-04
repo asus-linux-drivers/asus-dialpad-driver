@@ -287,12 +287,6 @@ except Exception as e:
         )
         sys.exit(1)
 
-# App-specific configuration (add more mappings as needed)
-
-
-# Initialize the virtual device globally
-uinput_device = None
-
 # Config
 CONFIG_FILE_NAME = "dialpad_dev"
 CONFIG_SECTION = "main"
@@ -915,9 +909,9 @@ def emulate_shortcuts(app_shortcuts, touch_input, event_code, active_modifiers, 
     return None
 
 def send_key_event(key_code, key_value):
-    global uinput_device
+    global udev
 
-    if not uinput_device:
+    if not udev:
         log.error("Virtual device is not initialized. Cannot send key events.")
         return
 
@@ -926,29 +920,29 @@ def send_key_event(key_code, key_value):
             if key_code and key_value:
                 for c, v in zip(key_code, key_value):
                     if c.type == EV_REL:
-                        uinput_device.send_events([
+                        udev.send_events([
                             InputEvent(c, v),
                             InputEvent(EV_SYN.SYN_REPORT, 0)
                         ])
             elif key_code:
                 for c in key_code:
                     if c.type == EV_KEY:
-                        uinput_device.send_events([
+                        udev.send_events([
                             InputEvent(c, 1),
                             InputEvent(EV_SYN.SYN_REPORT, 0)
                         ])
                 for c in key_code:
                     if c.type == EV_KEY:
-                        uinput_device.send_events([
+                        udev.send_events([
                             InputEvent(c, 0),
                             InputEvent(EV_SYN.SYN_REPORT, 0)
                         ])
         else:
-            uinput_device.send_events([
+            udev.send_events([
                 InputEvent(key_code, 1),
                 InputEvent(EV_SYN.SYN_REPORT, 0)
             ])
-            uinput_device.send_events([
+            udev.send_events([
                 InputEvent(key_code, 0),
                 InputEvent(EV_SYN.SYN_REPORT, 0)
          ])

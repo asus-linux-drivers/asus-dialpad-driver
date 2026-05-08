@@ -5,14 +5,16 @@
 
   outputs = {nixpkgs, self, ...} @ inputs: let
     forAllSystems = nixpkgs.lib.genAttrs ["x86_64-linux" "i686-linux" "aarch64-linux"];
-    pkgsForEach = nixpkgs.legacyPackages;
+
+    pkgsForEach = forAllSystems (system: nixpkgs.legacyPackages.${system}.appendOverlays [
+      self.overlays.default
+    ]);
   in {
     packages = forAllSystems (system:
       let pkgs = pkgsForEach.${system}; in
       {
-        default = pkgs.callPackage ./nix {
-          xinput = pkgs.xinput or pkgs.xorg.xinput;
-        };
+        inherit (pkgs) asus-dialpad-driver;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.asus-dialpad-driver;
       });
 
     devShells = forAllSystems (system: {
@@ -22,8 +24,8 @@
       };
     });
 
-    overlays.default = final: _: {
-      asus-dialpad-driver = self.packages.${final.stdenv.hostPlatform.system}.default;
+    overlays = {
+      default = import ./nix/overlay/default.nix;
     };
 
     nixosModules.default = import ./nix/module.nix inputs;

@@ -1,5 +1,4 @@
-
-inputs: { config, lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.asus-dialpad-driver;
@@ -9,14 +8,13 @@ let
     text = lib.generators.toINI {} cfg.config;
     destination = "/dialpad_dev";
   };
-  
 in {
   options.services.asus-dialpad-driver = {
     enable = lib.mkEnableOption "Enable the Asus DialPad Driver service.";
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.default.override { waylandSupport = cfg.wayland; };
+      default = pkgs.asus-dialpad-driver.override { waylandSupport = cfg.wayland; };
       description = "The package to use for the Asus DialPad Driver.";
     };
 
@@ -109,7 +107,7 @@ in {
     users.users.root.extraGroups = [ "i2c" "input" "uinput" ];
 
     # Add the udev rule to set permissions for uinput and i2c-dev
-    services.udev.extraRules = ''
+    services.udev.extraRules = /* udev */ ''
       # Set uinput device permissions
       KERNEL=="uinput", GROUP="uinput", MODE="0660"
       # Set i2c-dev permissions

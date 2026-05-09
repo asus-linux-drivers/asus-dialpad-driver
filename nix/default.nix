@@ -13,7 +13,17 @@
 python3Packages.buildPythonPackage {
   pname = "asus-dialpad-driver";
   version = "2.2.1";
-  src = ../.;
+
+  src =
+    let fs = lib.fileset; in
+    fs.toSource {
+      root = ../.;
+      fileset = fs.unions [
+        (fs.fileFilter (f: f.hasExt "py") ../.)
+        ../layouts
+        ../laptop_dialpad_layouts
+      ];
+    };
 
   pyproject = false;
 

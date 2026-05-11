@@ -8,6 +8,10 @@ let
     text = lib.generators.toINI {} cfg.config;
     destination = "/dialpad_dev";
   };
+
+  package =
+    cfg.package.override
+      (lib.optionalAttrs cfg.wayland { waylandSupport = true; });
 in {
   options.services.asus-dialpad-driver = {
     enable = lib.mkEnableOption "Enable the Asus DialPad Driver service.";
@@ -86,7 +90,7 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [ package ];
 
     # Ensure the writable directories exists
     systemd.tmpfiles.rules = [
@@ -124,13 +128,13 @@ in {
       startLimitIntervalSec=300;
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} ${configFileDir}/";
+        ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} ${configFileDir}/";
         StandardOutput = null;
         StandardError = null;
         Restart = "on-failure";
         RestartSec = 1;
         TimeoutSec = 5;
-        WorkingDirectory = "${cfg.package}/share/asus-dialpad-driver";
+        WorkingDirectory = "${package}/share/asus-dialpad-driver";
         Environment = [
           "XDG_SESSION_TYPE=${if cfg.wayland then "wayland" else "x11"}"
           "XDG_RUNTIME_DIR=${cfg.runtimeDir}"

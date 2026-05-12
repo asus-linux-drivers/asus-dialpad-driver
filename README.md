@@ -332,6 +332,24 @@ Layouts below are named by laptop models, but the name is not important. What is
 /usr/share/asus-dialpad-driver/.env/bin/python3 /usr/share/asus-dialpad-driver/dialpad.py <asusvivobook16x|proartp16|..>
 ```
 
+**How to install the driver when is used conda for managing multiple Python versions?**
+
+```
+$ # install conda and then
+$ conda create -n conda_env -c conda-forge python=3.11
+$ conda activate conda_env
+(conda_env) $ which python3
+/home/ldrahnik/miniconda3/envs/conda_env/bin/python3
+(conda_env) $ python3 --version
+Python 3.11.13
+(conda_env) $ bash install.sh
+...
+$ (conda_env) $ /usr/share/asus-numberpad-driver/.env/bin/python3 --version
+Python 3.11.13
+(conda_env) $ conda deactivate
+$
+```
+
 **How to install the driver when is used pyenv for managing multiple Python versions?**
 
 ```

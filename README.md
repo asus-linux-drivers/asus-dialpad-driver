@@ -185,7 +185,9 @@ Run driver now and every time that user logs in (do NOT run as `$ sudo`, works v
 $ bash install_service.sh
 ```
 
-or for NixOS you can use flakes for the installation of this driver.
+#### NixOS
+
+Nix code is provided for this driver.
 
 > [!IMPORTANT]
 > In case the layout isn't provided, the "proartp16" DialPad layout is used.
@@ -198,7 +200,52 @@ or for NixOS you can use flakes for the installation of this driver.
 <summary>The driver installation (NixOS)</summary>
 <br>
 
-This repo contains a Flake that exposes a NixOS Module that manages and offers options for asus-dialpad-driver. To use it, add the flake as an input to your `flake.nix` file and enable the module:
+##### All Nix versions
+
+First, you will want to pin this repository using your input pinner of choice (some [listed on the Wiki](https://wiki.nixos.org/wiki/Applications#Dependencies)).
+After, we need to add the overlay & module to the system.
+While there are many ways to organize a NixOS system, for a simple `configuration.nix`-only example:
+
+```nix
+# configuration.nix
+{ config, lib, pkgs, ... }:
+
+let
+  inputs = import ./my/pinned/inputs { };
+in
+{
+  system = "x86_64-linux";
+
+  nixpkgs.overlays = [
+    (import "${inputs.asus-dialpad-driver}/nix/overlay")
+  ];
+
+  modules = [
+    (import "${inputs.asus-dialpad-driver}/nix/module.nix")
+  ];
+
+  # Enable Asus DialPad Service
+  services.asus-dialpad-driver = {
+    enable = true;
+    layout = "default";
+    wayland = true;
+    ignoreWaylandDisplayEnv = false;
+    runtimeDir = "/run/user/1000/";
+    waylandDisplay = "wayland-0";
+  };
+}
+```
+
+> The key for the caclulator toggling script should be associated with XF86Calculator, allowing it to toggle any calculator application, not just the one specified in the configuration. This means that the key binding can be used to manage various calculator applications across different key binding configurations. For e.g.:
+
+```nix
+"XF86Calculator".action = sh -c "if pidof gnome-calculator > /dev/null; then kill $(pidof gnome-calculator); else gnome-calculator; fi";
+```
+
+##### Nix flakes only
+
+[Flakes](https://nix.dev/concepts/flakes.html) are another, experimental way to add asus-dialpad-driver to your system.
+To add it to your system’s flake.
 
 ```nix
 # flake.nix
@@ -217,41 +264,23 @@ This repo contains a Flake that exposes a NixOS Module that manages and offers o
 
     outputs = {nixpkgs, asus-dialpad-driver, ...} @ inputs: {
         nixosConfigurations.HOSTNAME = nixpkgs.lib.nixosSystem {
-            specialArgs = { inherit inputs; };
+
             modules = [
-                ./configuration.nix
+                ({ ... }: {
+                  nixpkgs.overlays = [
+                    asus-dialpad-driver.overlays.default
+                  ];
+                })
                 asus-dialpad-driver.nixosModules.default
+                ./configuration.nix
             ];
         };
     }
 }
 ```
-Then you can enable the program in your `configuration.nix` file:
-```nix
-# configuration.nix
-
-{inputs, pkgs, ...}: {
-  # ---Snip---
-  # Enable Asus DialPad Service
-  services.asus-dialpad-driver = {
-    enable = true;
-    layout = "default";
-    wayland = true;
-    ignoreWaylandDisplayEnv = false;
-    runtimeDir = "/run/user/1000/";
-    waylandDisplay = "wayland-0";
-  };
-  # ---Snip---
-}
+Then you can enable the service, `services.asus-dialpad-driver`, in your `configuration.nix` file in the same way as the prior section for stable Nix.
 
 ```
-
-> The key for the caclulator toggling script should be associated with XF86Calculator, allowing it to toggle any calculator application, not just the one specified in the configuration. This means that the key binding can be used to manage various calculator applications across different key binding configurations. For e.g.:
-
-```
-"XF86Calculator".action = sh -c "if pidof gnome-calculator > /dev/null; then kill $(pidof gnome-calculator); else gnome-calculator; fi";
-```
-
 </details>
 
 ## Uninstallation

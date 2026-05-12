@@ -1,5 +1,4 @@
-
-inputs: { config, lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.asus-dialpad-driver;
@@ -9,14 +8,17 @@ let
     text = lib.generators.toINI {} cfg.config;
     destination = "/dialpad_dev";
   };
-  
+
+  package =
+    cfg.package.override
+      (lib.optionalAttrs cfg.wayland { waylandSupport = true; });
 in {
   options.services.asus-dialpad-driver = {
     enable = lib.mkEnableOption "Enable the Asus DialPad Driver service.";
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.default.override { waylandSupport = cfg.wayland; };
+      default = pkgs.asus-dialpad-driver.override { waylandSupport = cfg.wayland; };
       description = "The package to use for the Asus DialPad Driver.";
     };
 
@@ -88,7 +90,7 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [ package ];
 
     # Ensure the writable directories exists
     systemd.tmpfiles.rules = [
@@ -109,7 +111,7 @@ in {
     users.users.root.extraGroups = [ "i2c" "input" "uinput" ];
 
     # Add the udev rule to set permissions for uinput and i2c-dev
-    services.udev.extraRules = ''
+    services.udev.extraRules = /* udev */ ''
       # Set uinput device permissions
       KERNEL=="uinput", GROUP="uinput", MODE="0660"
       # Set i2c-dev permissions
@@ -126,13 +128,13 @@ in {
       startLimitIntervalSec=300;
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} ${configFileDir}/";
+        ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} ${configFileDir}/";
         StandardOutput = null;
         StandardError = null;
         Restart = "on-failure";
         RestartSec = 1;
         TimeoutSec = 5;
-        WorkingDirectory = "${cfg.package}/share/asus-dialpad-driver";
+        WorkingDirectory = "${package}/share/asus-dialpad-driver";
         Environment = [
           "XDG_SESSION_TYPE=${if cfg.wayland then "wayland" else "x11"}"
           "XDG_RUNTIME_DIR=${cfg.runtimeDir}"

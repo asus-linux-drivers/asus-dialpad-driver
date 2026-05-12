@@ -1,27 +1,32 @@
 { lib
-, pkgs
 , python3Packages
 , ibus
 , libevdev
 , curl
-, xorg
+, xinput # xorg.xinput can passed in with override for old version of Nixpkgs
 , i2c-tools
 , libxml2
 , libxkbcommon
 , waylandSupport ? false
 }:
 
-let
-  compat = import ./compat.nix { inherit pkgs; };
-in
-
-python3Packages.buildPythonApplication {
+python3Packages.buildPythonPackage {
   pname = "asus-dialpad-driver";
   version = "2.2.1";
-  src = ../.;
-  
+
+  src =
+    let fs = lib.fileset; in
+    fs.toSource {
+      root = ../.;
+      fileset = fs.unions [
+        (fs.fileFilter (f: f.hasExt "py") ../.)
+        ../layouts
+        ../laptop_dialpad_layouts
+      ];
+    };
+
   pyproject = false;
-  
+
   dependencies = with python3Packages; [
     numpy
     python3Packages.libevdev
@@ -32,13 +37,13 @@ python3Packages.buildPythonApplication {
     systemd-python
     xcffib
     python-periphery
-  ] ++ lib.optional waylandSupport [ python3Packages.pywayland ];
+  ] ++ lib.optional waylandSupport python3Packages.pywayland;
 
   buildInputs = [
     ibus
     libevdev
     curl
-    compat.xinput
+    xinput
     i2c-tools
     libxml2
     libxkbcommon
@@ -62,7 +67,7 @@ python3Packages.buildPythonApplication {
     # Change line endings to Unix format
     sed -i 's/\r$//' $out/share/asus-dialpad-driver/dialpad.py
   '';
-  
+
   # Patch shebangs (defaults to files in $out/bin)
   postFixup = ''
     wrapPythonProgramsIn "$out/share/asus-dialpad-driver" "$out $pythonPath"

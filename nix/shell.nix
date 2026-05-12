@@ -1,12 +1,17 @@
-{ stdenv,
-  python3Packages,
+{
   mkShell,
-  self,
+  python3Packages,
+  asus-dialpad-driver,
 }:
+
 mkShell {
-  inputsFrom = [ self.packages.${stdenv.hostPlatform.system}.default ];
+  name = "asus-dialpad-driver";
+
+  inputsFrom = [
+    asus-dialpad-driver
+  ];
   
   packages = [
-        python3Packages.pip
+    python3Packages.pip
   ];
 }

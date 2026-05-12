@@ -1,7 +1,7 @@
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.asus-dialpad-driver;
+  cfg = config.hardware.asus-dialpad-driver;
 
   configFileDir = pkgs.writeTextFile {
     name = "asus-dialpad-driver-config";
@@ -13,8 +13,24 @@ let
     cfg.package.override
       (lib.optionalAttrs cfg.wayland { waylandSupport = true; });
 in {
-  options.services.asus-dialpad-driver = {
-    enable = lib.mkEnableOption "Enable the Asus DialPad Driver service.";
+  imports = [
+    (lib.mkRenamedOptionModule
+      [ "services" "asus-dialpad-driver" ]
+      [ "hardware" "asus-dialpad-driver" ])
+  ];
+
+  options.hardware.asus-dialpad-driver = {
+    enable = lib.mkOption {
+      default = false;
+      type = lib.types.bool;
+      description = "Enable the Asus DialPad Driver module (udev rules, i2c, groups).";
+    };
+
+    daemon.enable = lib.mkOption {
+      default = true;
+      type = lib.types.bool;
+      description = "Whether to start the Asus DialPad Driver daemon as a systemd user service.";
+    };
 
     package = lib.mkOption {
       type = lib.types.package;
@@ -28,35 +44,10 @@ in {
       description = "The layout identifier for the DialPad driver (e.g. proart16). This value is required.";
     };
 
-    display = lib.mkOption {
-      type = lib.types.str;
-      default = ":0";
-      description = "The DISPLAY environment variable. Default is :0.";
-    };
-
     wayland = lib.mkOption {
       type = lib.types.bool;
       default = true;
       description = "Enable this option to run under Wayland. Disable it for X11.";
-    };
-
-    waylandDisplay = lib.mkOption {
-      type = lib.types.str;
-      default = "wayland-0";
-      description = "The WAYLAND_DISPLAY environment variable. Default is wayland-0.";
-    };
-
-    ignoreWaylandDisplayEnv = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description =
-        "If true, WAYLAND_DISPLAY will not be set in the service environment.";
-    };
-
-    runtimeDir = lib.mkOption {
-      type = lib.types.str;
-      default = "/run/user/1000/";
-      description = "The XDG_RUNTIME_DIR environment variable, specifying the runtime directory.";
     };
 
     config = lib.mkOption {
@@ -121,7 +112,7 @@ in {
     # Load specific kernel modules
     boot.kernelModules = [ "uinput" "i2c-dev" ];
 
-    systemd.services.asus-dialpad-driver = {
+    systemd.services.asus-dialpad-driver = lib.mkIf cfg.daemon.enable {
       description = "Asus DialPad Driver";
       wantedBy = [ "default.target" ];
       startLimitBurst=20;
@@ -137,11 +128,10 @@ in {
         WorkingDirectory = "${package}/share/asus-dialpad-driver";
         Environment = [
           "XDG_SESSION_TYPE=${if cfg.wayland then "wayland" else "x11"}"
-          "XDG_RUNTIME_DIR=${cfg.runtimeDir}"
-          "DISPLAY=${cfg.display}"
+          "XDG_RUNTIME_DIR=/run/user/1000/"
+          "DISPLAY=:0"
           "LOG=WARNING"
-        ] ++ lib.optional (!cfg.ignoreWaylandDisplayEnv)
-          "WAYLAND_DISPLAY=${cfg.waylandDisplay}";
+        ] ++ lib.optional cfg.wayland "WAYLAND_DISPLAY=wayland-0";
       };
     };
 

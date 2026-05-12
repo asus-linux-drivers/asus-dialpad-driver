@@ -280,7 +280,6 @@ To add it to your system’s flake.
 ```
 Then you can enable the service, `services.asus-dialpad-driver`, in your `configuration.nix` file in the same way as the prior section for stable Nix.
 
-```
 </details>
 
 ## Uninstallation

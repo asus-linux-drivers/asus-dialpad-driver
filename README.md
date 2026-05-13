@@ -226,7 +226,7 @@ in
   # Enable Asus DialPad Service
   hardware.asus-dialpad-driver = {
     enable = true;
-    wayland = true; # default
+    sessionTypes = [ "wayland" "x11" ]; # default
     # Enable user-level systemd service
     daemon.enable = true; # default
     layout = "proartp16"; # default

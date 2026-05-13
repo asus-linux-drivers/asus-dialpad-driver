@@ -12,7 +12,7 @@ let
 
   package =
     cfg.package.override
-      (lib.optionalAttrs cfg.wayland { waylandSupport = true; });
+      (lib.optionalAttrs (lib.elem "wayland" cfg.sessionTypes) { waylandSupport = true; });
 in {
   imports = [
     (lib.mkRenamedOptionModule
@@ -36,22 +36,21 @@ in {
       '';
     };
 
-    package = lib.mkOption {
-      type = lib.types.package;
-      default = pkgs.asus-dialpad-driver.override { waylandSupport = cfg.wayland; };
-      description = "The package to use for the Asus DialPad Driver.";
+    package = lib.mkPackageOption pkgs "asus-dialpad-driver" { };
+
+    sessionTypes = lib.mkOption {
+      type = lib.types.uniq (lib.types.nonEmptyListOf (lib.types.enum [ "wayland" "x11" ]));
+      default = [ "wayland" "x11" ];
+      description = ''
+        The display server session types to support.
+        All listed types will be built into the package.
+      '';
     };
 
     layout = lib.mkOption {
       type = lib.types.str;
       default = "proartp16";
       description = "The layout identifier for the DialPad driver (e.g. proart16). This value is required.";
-    };
-
-    wayland = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Enable this option to run under Wayland. Disable it for X11.";
     };
 
     defaultConfig = lib.mkOption {
@@ -126,7 +125,6 @@ in {
         TimeoutSec = 5;
         WorkingDirectory = "${package}/share/asus-dialpad-driver";
         Environment = [
-          "XDG_SESSION_TYPE=${if cfg.wayland then "wayland" else "x11"}"
           "LOG=WARNING"
         ];
       };

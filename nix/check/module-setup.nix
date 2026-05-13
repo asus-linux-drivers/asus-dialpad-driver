@@ -44,6 +44,7 @@ testers.nixosTest ({ pkgs, ... }: {
       enable = true;
       daemon.enable = true;
       layout = "proartp16";
+      sessionTypes = [ "wayland" ];
     };
   };
 

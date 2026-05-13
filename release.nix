@@ -1,3 +1,6 @@
+# To make sure everything builds/checks successfull run:
+#
+# 	$ nix-build --no-out-link release.nix
 let
   flake_lock = builtins.fromJSON (builtins.readFile ./flake.lock);
 

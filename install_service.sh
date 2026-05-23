@@ -61,6 +61,7 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
         echo "Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
     fi
 
+    source $INSTALL_DIR_PATH/.env/bin/activate
     pip3 install -r requirements.systemd.txt
 
     SERVICE=1

@@ -182,8 +182,13 @@ $ bash install_user_groups.sh
 Run driver now and every time that user logs in (do NOT run as `$ sudo`, works via `systemctl --user`):
 
 ```bash
+# with user interface
+$ bash install_user_interface.sh
+$ bash install_service.sh
+
+# with no user interface
 $ USER_INTERFACE=0 \
-  bash install_service.sh
+ bash install_service.sh
 ```
 
 #### NixOS

@@ -28,6 +28,7 @@ USER_INTERFACE=0
 read -r -p "Do you want to install the DialPad User Interface? [y/N]" RESPONSE
 case "$RESPONSE" in [yY][eE][sS]|[yY])
 
+    source $INSTALL_DIR_PATH/.env/bin/activate
     pip3 install -r requirements.ui.txt
 
     USER_INTERFACE=1

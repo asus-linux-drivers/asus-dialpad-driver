@@ -18,6 +18,9 @@ fi
 if [ -z "$INSTALL_DIR_PATH" ]; then
     INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
 fi
+if [ -z "$USER_INTERFACE" ]; then
+    USER_INTERFACE=1
+fi
 
 echo "Systemctl service(s)"
 echo

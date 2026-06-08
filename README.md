@@ -473,6 +473,7 @@ slices_minimum_count = 5
 
 ## Debugging
 
+- The driver can be installed like `LOG=DEBUG bash install.sh` to extend the logs to a debug level (**recommended only for short-term debugging purpose**)
 
 At first check systemd service logs:
 

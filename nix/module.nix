@@ -1,25 +1,50 @@
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.asus-dialpad-driver;
+  cfg = config.hardware.asus-dialpad-driver;
 
-  configFileDir = pkgs.writeTextFile {
-    name = "asus-dialpad-driver-config";
-    text = lib.generators.toINI {} cfg.config;
-    destination = "/dialpad_dev";
-  };
+  defaultConfigFile =
+    pkgs.writeText "asus-dialpad-driver-default-config.ini" /* ini */ ''
+      ; vim: filetype=dosini
+      ; Asus DialPad configuration
+      ${lib.generators.toINI { } cfg.defaultConfig}
+    '';
 
   package =
     cfg.package.override
-      (lib.optionalAttrs cfg.wayland { waylandSupport = true; });
+      (lib.optionalAttrs (lib.elem "wayland" cfg.sessionTypes) { waylandSupport = true; });
 in {
-  options.services.asus-dialpad-driver = {
-    enable = lib.mkEnableOption "Enable the Asus DialPad Driver service.";
+  imports = [
+    (lib.mkRenamedOptionModule
+      [ "services" "asus-dialpad-driver" ]
+      [ "hardware" "asus-dialpad-driver" ])
+  ];
 
-    package = lib.mkOption {
-      type = lib.types.package;
-      default = pkgs.asus-dialpad-driver.override { waylandSupport = cfg.wayland; };
-      description = "The package to use for the Asus DialPad Driver.";
+  options.hardware.asus-dialpad-driver = {
+    enable = lib.mkOption {
+      default = false;
+      type = lib.types.bool;
+      description = "Enable the Asus DialPad Driver module (udev rules, i2c, groups).";
+    };
+
+    daemon.enable = lib.mkOption {
+      default = true;
+      type = lib.types.bool;
+      description = ''
+        Whether to start the Asus DialPad Driver daemon as a systemd user service.
+        Note that the user *must* be enrolled in these groups: i2c, input, uinput.
+      '';
+    };
+
+    package = lib.mkPackageOption pkgs "asus-dialpad-driver" { };
+
+    sessionTypes = lib.mkOption {
+      type = lib.types.uniq (lib.types.nonEmptyListOf (lib.types.enum [ "wayland" "x11" ]));
+      default = [ "wayland" "x11" ];
+      description = ''
+        The display server session types to support.
+        All listed types will be built into the package.
+      '';
     };
 
     layout = lib.mkOption {
@@ -28,38 +53,7 @@ in {
       description = "The layout identifier for the DialPad driver (e.g. proart16). This value is required.";
     };
 
-    display = lib.mkOption {
-      type = lib.types.str;
-      default = ":0";
-      description = "The DISPLAY environment variable. Default is :0.";
-    };
-
-    wayland = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Enable this option to run under Wayland. Disable it for X11.";
-    };
-
-    waylandDisplay = lib.mkOption {
-      type = lib.types.str;
-      default = "wayland-0";
-      description = "The WAYLAND_DISPLAY environment variable. Default is wayland-0.";
-    };
-
-    ignoreWaylandDisplayEnv = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description =
-        "If true, WAYLAND_DISPLAY will not be set in the service environment.";
-    };
-
-    runtimeDir = lib.mkOption {
-      type = lib.types.str;
-      default = "/run/user/1000/";
-      description = "The XDG_RUNTIME_DIR environment variable, specifying the runtime directory.";
-    };
-
-    config = lib.mkOption {
+    defaultConfig = lib.mkOption {
       type = with lib.types;
         let
           valueType = nullOr (oneOf [
@@ -84,18 +78,16 @@ in {
           config_supress_app_specifics_shortcuts = 0;
         };
       };
-      default = {};
-      description = "Configuration options for the Asus DialPad Driver.";
+      default = { };
+      description = ''
+        Default configuration options for the Asus DialPad Driver on first run.
+        It’s recommended to use a user-level configuration manager for this file or manually define with `lib.generators.toINI { } { /* your config */ }`.
+      '';
     };
   };
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ package ];
-
-    # Ensure the writable directories exists
-    systemd.tmpfiles.rules = [
-      "d /var/log/asus-dialpad-driver 0755 root root -"
-    ];
 
     # Enable i2c
     hardware.i2c.enable = true;
@@ -106,9 +98,6 @@ in {
       input = { };
       i2c = { };
     };
-
-    # Add root to the necessary groups
-    users.users.root.extraGroups = [ "i2c" "input" "uinput" ];
 
     # Add the udev rule to set permissions for uinput and i2c-dev
     services.udev.extraRules = /* udev */ ''
@@ -121,27 +110,23 @@ in {
     # Load specific kernel modules
     boot.kernelModules = [ "uinput" "i2c-dev" ];
 
-    systemd.services.asus-dialpad-driver = {
+    systemd.user.services.asus-dialpad-driver = lib.mkIf cfg.daemon.enable {
       description = "Asus DialPad Driver";
-      wantedBy = [ "default.target" ];
-      startLimitBurst=20;
-      startLimitIntervalSec=300;
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} ${configFileDir}/";
-        StandardOutput = null;
-        StandardError = null;
+        ConfigurationDirectory = "asus-dialpad-driver";
+        # Create a default config from the Nix config if missing
+        ExecStartPre = "${lib.getExe pkgs.dash} -c 'if [ ! -s %E/asus-dialpad-driver/dialpad_dev ]; then ${lib.getBin pkgs.coreutils}/bin/install -m 644 ${defaultConfigFile} %E/asus-dialpad-driver/dialpad_dev; fi'";
+        ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} %E/asus-dialpad-driver/";
         Restart = "on-failure";
         RestartSec = 1;
         TimeoutSec = 5;
         WorkingDirectory = "${package}/share/asus-dialpad-driver";
         Environment = [
-          "XDG_SESSION_TYPE=${if cfg.wayland then "wayland" else "x11"}"
-          "XDG_RUNTIME_DIR=${cfg.runtimeDir}"
-          "DISPLAY=${cfg.display}"
           "LOG=WARNING"
-        ] ++ lib.optional (!cfg.ignoreWaylandDisplayEnv)
-          "WAYLAND_DISPLAY=${cfg.waylandDisplay}";
+        ];
       };
     };
 

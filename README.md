@@ -194,13 +194,7 @@ $ USER_INTERFACE=0 \
 #### NixOS
 
 Nix code is provided for this driver.
-
-> [!IMPORTANT]
-> In case the layout isn't provided, the "proartp16" DialPad layout is used.
-
-> The default value for runtimeDir is `/run/usr/1000/`, for waylandDisplay is `wayland-0` and wayland is `true`.
-
-> Enabling `ignoreWaylandDisplayEnv` removes the explicit declaration of `WAYLAND_DISPLAY` in the service, allowing it to function correctly when switching between desktop environments or window managers that may have different `WAYLAND_DISPLAY` environment variables.
+Please read the `nix/module.nix` for default behavior.
 
 <details>
 <summary>The driver installation (NixOS)</summary>
@@ -230,14 +224,19 @@ in
     (import "${inputs.asus-dialpad-driver}/nix/module.nix")
   ];
 
+  # Users *must* be enrolled in these groups
+  users.users.alice = {
+    extraGroups = [ "i2c" "input" "uinput" ];
+  };
+
   # Enable Asus DialPad Service
-  services.asus-dialpad-driver = {
+  hardware.asus-dialpad-driver = {
     enable = true;
-    layout = "default";
-    wayland = true;
-    ignoreWaylandDisplayEnv = false;
-    runtimeDir = "/run/user/1000/";
-    waylandDisplay = "wayland-0";
+    sessionTypes = [ "wayland" "x11" ]; # default
+    # Enable user-level systemd service
+    daemon.enable = true; # default
+    layout = "proartp16"; # default
+    defaultConfig = { /* … */ };
   };
 }
 ```

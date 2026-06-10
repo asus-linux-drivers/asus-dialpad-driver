@@ -119,8 +119,8 @@ in {
         ConfigurationDirectory = "asus-dialpad-driver";
         ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} %E/asus-dialpad-driver/";
         # The script logs to the journal directly
-        StandardOutput=null
-        StandardError=null
+        StandardOutput = null;
+        StandardError = null;
         Restart = "on-failure";
         RestartSec = 1;
         TimeoutSec = 5;

@@ -120,6 +120,9 @@ in {
         # Create a default config from the Nix config if missing
         ExecStartPre = "${lib.getExe pkgs.dash} -c 'if [ ! -s %E/asus-dialpad-driver/dialpad_dev ]; then ${lib.getBin pkgs.coreutils}/bin/install -m 644 ${defaultConfigFile} %E/asus-dialpad-driver/dialpad_dev; fi'";
         ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} %E/asus-dialpad-driver/";
+        # The script logs to the journal directly
+        StandardOutput=null
+        StandardError=null
         Restart = "on-failure";
         RestartSec = 1;
         TimeoutSec = 5;

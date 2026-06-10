@@ -125,7 +125,7 @@ in {
         TimeoutSec = 5;
         WorkingDirectory = "${package}/share/asus-dialpad-driver";
         Environment = [
-          "LOG=WARNING"
+          "LOG=INFO"
         ];
       };
     };

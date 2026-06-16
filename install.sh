@@ -35,8 +35,8 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         PACKAGE_MANAGER="rpm-ostree"
 
         # note: systemd packages are installed separately in install_service.sh if user chooses systemd
-        PACKAGES="xinput python3-devel python3-pyatspi wayland-protocols-devel pkg-config libxcb-devel libxkbcommon-devel"
-        
+        PACKAGES="curl xinput i2c-tools python3-devel python3-pyatspi wayland-protocols-devel gcc pkg-config libxcb-devel libxkbcommon-devel cairo-devel cairo-gobject-devel glib2-devel gobject-introspection-devel"
+
         if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
             PACKAGES="$PACKAGES wayland-devel"
         fi
@@ -53,7 +53,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         done
 
         if [ -n "$MISSING_PACKAGES" ]; then
-            sudo rpm-ostree install $MISSING_PACKAGES
+            sudo rpm-ostree install --allow-inactive $MISSING_PACKAGES
         fi
     elif command -v apt-get >/dev/null 2>&1; then
         PACKAGE_MANAGER="apt"
@@ -134,7 +134,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
     if [[ $? != 0 ]]; then
         echo "Error: Something went wrong during installing packages"
 
-        if [[ "$PACKAGE_MANAGER" == "rpm-ostree" ]]; then
+        if [[ "$PACKAGE_MANAGER" == "rpm-ostree" && -n "$MISSING_PACKAGES" ]]; then
             echo
             echo "Common issue:"
             echo "  - Not enough disk space (run: sudo rpm-ostree cleanup -b && sudo ostree admin cleanup)"

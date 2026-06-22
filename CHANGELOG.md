@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.3.0 (22.6.2026)
+
+### Fixed
+
+- Missing required dependency for `rpm-ostree` + added `allow inactive` + require reboot only when is needed (reported on `Fedora Silverblue`)
+- Missing symlink for `wayland` and `xkbcommon` headers to `/usr/include` (reported on `OpenSUSE`)
+- Default log level `DEBUG` decreased to `INFO`
+- Reworked NixOS support (credits @toastal)
+- Detection because missing `line`
+- Name of `uinput` device variable
+- Added missing `sudo` when removing `__pycache__`
+- Re-loading `coactivator` keys on `Wayland` when was config not loaded yet and added re-loading on X11 completely
+
+### Feature
+
+- Added possibility to run `$ LOG=DEBUG bash install.sh`
+- Added elimination of Stylus `9008` (fullname `ELAN9008:00 04F3:4631 Stylus`)
+- Added DSDT probing script
+
 ## 2.2.1 (27.4.2026)
 
 ### Fixed

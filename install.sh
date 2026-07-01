@@ -2,6 +2,10 @@
 
 source non_sudo_check.sh
 
+source install_security_check.sh
+
+echo
+
 START_TIME=${EPOCHREALTIME::-7}
 
 # ENV VARS
@@ -128,7 +132,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
             sudo eopkg install -y qt$PLASMA_VER-tools
         fi
     else
-        echo "Warning: Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
+        echo "WARNING: Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
     fi
 
     if [[ $? != 0 ]]; then
@@ -175,7 +179,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
    ! command -v qdbus >/dev/null 2>&1 && \
    ! command -v qdbus6 >/dev/null 2>&1; then
         echo
-        echo "Warning: You are using Plasma desktop environment and qdbus is not available after installation. Manual intervention is required for the driver to function properly." >&2
+        echo "WARNING: You are using Plasma desktop environment and qdbus is not available after installation. Manual intervention is required for the driver to function properly." >&2
         read -n1 -r -p "Press any key to continue.."
         echo
     fi

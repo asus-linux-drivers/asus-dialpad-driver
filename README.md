@@ -537,7 +537,8 @@ Listening on /tmp/dialpad.sock
 
 ## Existing related projects
 
-- [c] Set of tools for handling ASUS Dial and simmilar designware hardware under Linux (https://github.com/fredaime/openwheel)
+- [c++] Set of tools for handling ASUS Dial and similar designware hardware under Linux (https://github.com/fredaime/openwheel)
+- [c++] Continuing development of the project above for the ASUS Dial (https://github.com/FrancisChung/asus-dial-driver)
 
 **Why was this project created?** Because linux does not support integration of DialPad into a Touchpad
 

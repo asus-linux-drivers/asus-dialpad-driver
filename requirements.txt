@@ -4,7 +4,7 @@ pyinotify
 python-xlib
 python-periphery
 pyasyncore
-xkbcommon<1.1
+xkbcommon
 xcffib
 python3-pyatspi
 pygobject<3.52.1

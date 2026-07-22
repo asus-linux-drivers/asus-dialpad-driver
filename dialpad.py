@@ -509,7 +509,6 @@ def load_all_config_values():
 def send_value_to_touchpad_via_i2c(value):
     global device_id, device_addr
 
-    # Payload is the same as before, only the transport changes
     data = [
         0x05, 0x00, 0x3d, 0x03, 0x06, 0x00, 0x07, 0x00,
         0x0d, 0x14, 0x03, int(value, 16), 0xad,
@@ -517,17 +516,8 @@ def send_value_to_touchpad_via_i2c(value):
 
     path = f"/dev/i2c-{device_id}"
 
-    # 1) Try python-periphery first
-    try:
-        with I2C(path) as i2c:
-            msg = I2C.Message(data)
-            i2c.transfer(device_addr, [msg])
-            log.debug("Sent I2C data via python-periphery on %s", path)
-            return True
-    except Exception as e:
-        log.debug("periphery.I2C transfer failed on %s: %s; falling back to i2ctransfer", path, e)
-
-    # 2) Fallback: use i2ctransfer (from i2c-tools)
+    # https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/44
+    # 1) Try i2ctransfer first
     try:
         hex_data = [f"0x{b:02x}" for b in data]
         cmd = [
@@ -538,14 +528,27 @@ def send_value_to_touchpad_via_i2c(value):
         ] + hex_data
 
         log.debug("Trying I2C via i2ctransfer: %s", " ".join(cmd))
-        result = subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True, capture_output=True)
         log.debug("I2C transfer successful via i2ctransfer")
         return True
+
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode().strip() if e.stderr else str(e)
-        log.error("i2ctransfer failed: %s", stderr)
+        log.debug("i2ctransfer failed: %s; falling back to python-periphery", stderr)
+
     except Exception as e:
-        log.error("Error during fallback I2C transfer: %s", e)
+        log.debug("Error during i2ctransfer: %s; falling back to python-periphery", e)
+
+    # 2) Fallback: python-periphery
+    try:
+        with I2C(path) as i2c:
+            msg = I2C.Message(data)
+            i2c.transfer(device_addr, [msg])
+            log.debug("Sent I2C data via python-periphery on %s", path)
+            return True
+
+    except Exception as e:
+        log.error("periphery.I2C transfer failed on %s: %s", path, e)
 
     return False
 

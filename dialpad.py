@@ -11,7 +11,12 @@ import Xlib.X
 import Xlib.XK
 from xkbcommon import xkb
 from libevdev import EV_ABS, EV_KEY, EV_REL, EV_SYN, Device, InputEvent, device
-from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO, AsyncNotifier
+from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO
+# https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/44
+try:
+    from pyinotify import ThreadedNotifier as Notifier
+except ImportError:
+    from pyinotify import AsyncNotifier as Notifier
 from periphery import I2C
 from typing import Optional
 import re
@@ -2308,7 +2313,7 @@ try:
     mask = IN_CLOSE_WRITE | IN_IGNORED | IN_MOVED_TO
     watch_manager.add_watch(path, mask)
 
-    event_notifier = AsyncNotifier(watch_manager)
+    event_notifier = Notifier(watch_manager)
 
     t = threading.Thread(target=check_dialpad_automatical_disable_or_idle_due_inactivity)
     t.daemon = True

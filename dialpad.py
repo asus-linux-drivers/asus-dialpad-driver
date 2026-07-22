@@ -1944,7 +1944,7 @@ def check_gnome_layout():
         except:
           sources_evaluated = []
 
-        if len(mru_sources_evaluated) > 0:
+        if len(mru_sources_evaluated) > 0 and mru_sources_evaluated[0] in sources_evaluated:
 
             mru_layout_index = sources_evaluated.index(mru_sources_evaluated[0])
             mru_layout = mru_sources_evaluated[0][1].split("+")[0]

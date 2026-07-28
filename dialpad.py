@@ -2060,7 +2060,7 @@ watch_manager = None
 event_notifier = None
 
 def isEvent(event):
-    if hasattr(event, "name") and (hasattr(EV_KEY, event.name) or hasattr(EV_REL, event.name)):
+    if hasattr(event, "name") and event in EV_KEY.codes or event in EV_REL.codes:
         return True
     else:
         return False

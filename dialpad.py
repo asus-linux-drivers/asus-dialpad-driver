@@ -1708,6 +1708,7 @@ def mod_name_to_specific_keysym_name(mod_name):
                                     #log.info(keysym_name)
                                     return keysym_name
 
+        return mod_to_specific_keysym_name[mod_name]
     else:
       return mod_to_specific_keysym_name[mod_name]
 

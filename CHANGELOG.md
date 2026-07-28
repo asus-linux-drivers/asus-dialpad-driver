@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.4.0 (28.7.2026)
+
+### Fixed
+
+- Version of `xkbcommon` when is version of `libxkbcommon` not a lower then 1.5
+- Changed the order of `i2ctransfer` and `periphery.I2C` because periphery is raising buffer overflow (credits @noguerol)
+- Getting current layout on newer gnome when sources do not contain most recently used layout (credits @noguerol)
+- When import of `AsyncNotifier` is no longer possible (replaced by `ThreadedNotifier`) (credits @noguerol)
+- Detection of event when is the name not known but code is valid (credits @md2z34)
+- Situation on wayland when is not found e.g. `Alt` (because can be found under `Mod1`) (credits @SvenSvenson38)
+- Unmet dependencies for `python3-pyatspi` by using `--system-site-packages` inside `virtualenv`
+
+### Feature
+
+- Added to the install process security check with info about [CVE-2026-50292](https://github.com/advisories/GHSA-jcq8-v68h-2c44) (credits @GLLM)
+
 ## 2.3.0 (22.6.2026)
 
 ### Fixed

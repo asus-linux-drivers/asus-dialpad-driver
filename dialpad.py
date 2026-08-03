@@ -1729,7 +1729,8 @@ def listen_keyboard_events():
         d_k = Device(fd_k)
 
         for event in d_k.events():
-            if event.code in modifiers or event.code in coactivator_modifiers:
+
+            if event.type == EV_KEY and (event.code in modifiers or event.code in coactivator_modifiers):
 
                 if event.value == 1:  # Key Pressed
                     active_modifiers.add(event.code)

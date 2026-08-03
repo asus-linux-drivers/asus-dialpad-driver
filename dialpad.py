@@ -480,7 +480,6 @@ def load_all_config_values():
     global multi_app_mode_titles
     global multi_app_mode_icons
     global socket_send_progress_above_treshold
-    global coactivator_modifiers
 
     #log.debug("load_all_config_values: config_lock.acquire will be called")
     config_lock.acquire()

@@ -1163,6 +1163,7 @@ def are_modifier_keys_pressed(modifier_names):
                 modifier_keysym_name = mod_name_to_specific_keysym_name(modifier_name)
                 modifier_evdev_key = load_evdev_key_for_wayland(modifier_keysym_name, keyboard_state)
                 if modifier_evdev_key not in active_modifiers:
+                    log.debug("Modifier %s not pressed (evdev)", modifier_name)
                     return False
         except:
             pass

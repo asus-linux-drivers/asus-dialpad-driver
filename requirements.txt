@@ -6,4 +6,4 @@ python-periphery
 pyasyncore
 xkbcommon
 xcffib
-pygobject<3.52.1
+pygobject

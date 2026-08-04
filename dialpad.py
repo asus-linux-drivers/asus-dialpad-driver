@@ -119,7 +119,12 @@ app_specific_shortcuts = {}
 app_name = None
 coactivator_keys = None
 
-if xdg_session_type == "x11" and X11_LIBS_AVAILABLE:
+if xdg_session_type == "x11":
+
+    if not X11_LIBS_AVAILABLE:
+        log.error("X11 libraries are not available. Please install python-xlib and xcffib.")
+        sys.exit(1)
+
     try:
         display_var = os.environ.get('DISPLAY')
         display = Xlib.display.Display(display_var)
@@ -137,6 +142,10 @@ if xdg_session_type == "x11" and X11_LIBS_AVAILABLE:
         log.error(f"Failed to connect to X11 display: {e}")
         sys.exit(1)
 else:
+    if not PYWAYLAND_AVAILABLE:
+        log.error("Wayland library is not available. Please install pywayland.")
+        sys.exit(1)
+
     try:
         display_wayland_var = os.environ.get('WAYLAND_DISPLAY')
         display_wayland = Display(display_wayland_var)
@@ -2290,7 +2299,7 @@ try:
     # init the device
     initialize_virtual_device()
 
-    if xdg_session_type == "wayland" and PYWAYLAND_AVAILABLE:
+    if xdg_session_type == "wayland" and display_wayland and PYWAYLAND_AVAILABLE:
         t = threading.Thread(target=load_keymap_listener_wayland)
         t.daemon = True
         threads.append(t)

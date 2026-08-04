@@ -10,9 +10,10 @@ let
       ${lib.generators.toINI { } cfg.defaultConfig}
     '';
 
-  package =
-    cfg.package.override
-      (lib.optionalAttrs (lib.elem "wayland" cfg.sessionTypes) { waylandSupport = true; });
+  package = cfg.package.override {
+    waylandSupport = lib.elem "wayland" cfg.sessionTypes;
+    x11Support = lib.elem "x11" cfg.sessionTypes;
+  };
 in {
   imports = [
     (lib.mkRenamedOptionModule

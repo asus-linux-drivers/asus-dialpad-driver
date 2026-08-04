@@ -8,6 +8,7 @@
 , libxml2
 , libxkbcommon
 , waylandSupport ? false
+, x11Support ? true
 }:
 
 python3Packages.buildPythonPackage {
@@ -30,14 +31,15 @@ python3Packages.buildPythonPackage {
   dependencies = with python3Packages; [
     numpy
     python3Packages.libevdev
-    xlib
     pyinotify
     pyasyncore
     xkbcommon
     systemd-python
-    xcffib
     python-periphery
-  ] ++ lib.optional waylandSupport python3Packages.pywayland;
+  ] ++ lib.optionals x11Support [
+    xlib
+    xcffib
+  ] ++ lib.optional waylandSupport pywayland;
 
   buildInputs = [
     ibus

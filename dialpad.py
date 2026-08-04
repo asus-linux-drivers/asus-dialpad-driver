@@ -8,14 +8,14 @@ import threading
 from time import sleep, time
 
 # https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/48
-XLIB_LIBS_AVAILABLE = False
+X11_LIBS_AVAILABLE = False
 try:
     import Xlib.display
     import Xlib.X
     import Xlib.XK
     import xcffib
     import xcffib.xkb
-    XLIB_LIBS_AVAILABLE = True
+    X11_LIBS_AVAILABLE = True
 except ImportError:
     pass
 
@@ -119,7 +119,7 @@ app_specific_shortcuts = {}
 app_name = None
 coactivator_keys = None
 
-if xdg_session_type == "x11" and XLIB_LIBS_AVAILABLE:
+if xdg_session_type == "x11" and X11_LIBS_AVAILABLE:
     try:
         display_var = os.environ.get('DISPLAY')
         display = Xlib.display.Display(display_var)
@@ -1175,7 +1175,7 @@ def are_modifier_keys_pressed(modifier_names):
             pass
 
     # x11
-    if xkb_conn and XLIB_LIBS_AVAILABLE:
+    if xkb_conn and X11_LIBS_AVAILABLE:
 
         X11_MODIFIER_INDEX = {
             "Shift": 0,
@@ -1654,7 +1654,7 @@ def mod_name_to_specific_keysym_name(mod_name):
         'Hyper': 'Hyper_L'
     }
 
-    if display and XLIB_LIBS_AVAILABLE:
+    if display and X11_LIBS_AVAILABLE:
 
         mods_to_indexes_x11 = {
             "Shift": Xlib.X.ShiftMapIndex,
@@ -2296,7 +2296,7 @@ try:
         threads.append(t)
         t.start()
 
-    if xdg_session_type == "x11" and display:
+    if xdg_session_type == "x11" and display and X11_LIBS_AVAILABLE:
 
         # when is the driver starting event is not received
         load_evdev_keys_for_x11()

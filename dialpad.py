@@ -2347,6 +2347,12 @@ try:
         threads.append(t)
         t.start()
 
+    # check changes in config values
+    t = threading.Thread(target=check_config_values_changes)
+    t.daemon = True
+    threads.append(t)
+    t.start()
+
     t = threading.Thread(target=check_gnome_layout)
     t.daemon = True
     threads.append(t)

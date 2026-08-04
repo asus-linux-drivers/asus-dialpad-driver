@@ -6,9 +6,19 @@ import importlib
 import sys
 import threading
 from time import sleep, time
-import Xlib.display
-import Xlib.X
-import Xlib.XK
+
+# https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/48
+XLIB_LIBS_AVAILABLE = False
+try:
+    import Xlib.display
+    import Xlib.X
+    import Xlib.XK
+    import xcffib
+    import xcffib.xkb
+    XLIB_LIBS_AVAILABLE = True
+except ImportError:
+    pass
+
 from xkbcommon import xkb
 from libevdev import EV_ABS, EV_KEY, EV_REL, EV_SYN, Device, InputEvent, device
 from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO
@@ -27,8 +37,6 @@ import ast
 import signal
 import mmap
 import shutil
-import xcffib
-import xcffib.xkb
 import glob
 import socket
 import json
@@ -111,7 +119,7 @@ app_specific_shortcuts = {}
 app_name = None
 coactivator_keys = None
 
-if xdg_session_type == "x11":
+if xdg_session_type == "x11" and XLIB_LIBS_AVAILABLE:
     try:
         display_var = os.environ.get('DISPLAY')
         display = Xlib.display.Display(display_var)
@@ -1167,7 +1175,7 @@ def are_modifier_keys_pressed(modifier_names):
             pass
 
     # x11
-    if xkb_conn:
+    if xkb_conn and XLIB_LIBS_AVAILABLE:
 
         X11_MODIFIER_INDEX = {
             "Shift": 0,
@@ -1646,7 +1654,7 @@ def mod_name_to_specific_keysym_name(mod_name):
         'Hyper': 'Hyper_L'
     }
 
-    if display:
+    if display and XLIB_LIBS_AVAILABLE:
 
         mods_to_indexes_x11 = {
             "Shift": Xlib.X.ShiftMapIndex,

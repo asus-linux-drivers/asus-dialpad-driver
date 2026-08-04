@@ -1,1 +1,2 @@
 xcffib
+python-xlib

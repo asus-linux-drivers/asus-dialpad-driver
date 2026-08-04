@@ -24,7 +24,6 @@ import math
 import subprocess
 import configparser
 import ast
-from xkbcommon import xkb
 import signal
 import mmap
 import shutil

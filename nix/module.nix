@@ -129,6 +129,7 @@ in {
           "LOG=INFO"
         ];
       };
+      path = [ pkgs.i2c-tools ];
     };
 
   };

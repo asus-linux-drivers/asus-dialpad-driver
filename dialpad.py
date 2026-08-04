@@ -545,10 +545,10 @@ def send_value_to_touchpad_via_i2c(value):
 
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode().strip() if e.stderr else str(e)
-        log.debug("i2ctransfer failed: %s; falling back to python-periphery", stderr)
+        log.error("i2ctransfer failed: %s; falling back to python-periphery", stderr)
 
     except Exception as e:
-        log.debug("Error during i2ctransfer: %s; falling back to python-periphery", e)
+        log.error("Error during i2ctransfer: %s; falling back to python-periphery", e)
 
     # 2) Fallback: python-periphery
     try:

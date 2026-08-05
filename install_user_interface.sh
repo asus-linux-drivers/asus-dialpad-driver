@@ -41,14 +41,14 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
     echo "Enabling DialPad User Interface in configuration..."
 
     if [ ! -f "$CONFIG_FILE_PATH" ]; then
-        echo "[main]" | sudo tee "$CONFIG_FILE_PATH" > /dev/null
+        echo "[main]" | tee "$CONFIG_FILE_PATH" > /dev/null
     fi
 
     # check if the setting already exists
     if grep -q "socket_enabled" "$CONFIG_FILE_PATH"; then
-        sudo sed -i "s/socket_enabled.*/socket_enabled = 1/" "$CONFIG_FILE_PATH"
+        sed -i "s/socket_enabled.*/socket_enabled = 1/" "$CONFIG_FILE_PATH"
     else
         # add new setting under [main] section
-        sudo sed -i "/\[main\]/a socket_enabled = 1" "$CONFIG_FILE_PATH"
+        sed -i "/\[main\]/a socket_enabled = 1" "$CONFIG_FILE_PATH"
     fi
 esac

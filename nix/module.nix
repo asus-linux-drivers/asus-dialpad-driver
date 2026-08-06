@@ -93,23 +93,13 @@ in {
     # Enable i2c
     hardware.i2c.enable = true;
 
-    # Add groups for dialpad
+    # Enable uinput
+    hardware.uinput.enable = true;
+
+    # Add rest of the groups for dialpad
     users.groups = {
-      uinput = { };
       input = { };
-      i2c = { };
     };
-
-    # Add the udev rule to set permissions for uinput and i2c-dev
-    services.udev.extraRules = /* udev */ ''
-      # Set uinput device permissions
-      KERNEL=="uinput", GROUP="uinput", MODE="0660"
-      # Set i2c-dev permissions
-      SUBSYSTEM=="i2c-dev", GROUP="i2c", MODE="0660"
-    '';
-
-    # Load specific kernel modules
-    boot.kernelModules = [ "uinput" "i2c-dev" ];
 
     systemd.user.services.asus-dialpad-driver = lib.mkIf cfg.daemon.enable {
       description = "Asus DialPad Driver";

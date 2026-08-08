@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.5.0 (8.8.2026)
+
+### Fixed
+
+- More preciously freeze of `PyGObject<3.52` (only when exist girepository-2.0)
+- Changed permissions of config file via used `sudo`
+- Missing checking config values handler for changes (credits @Robin-Everaars)
+- Duplication of logs (output/error) of `systemd` service for `NixOS` (credits @Robin-Everaars)
+- Missing filtering out everything except `EV_KEY` events when listening for active modifiers
+- Usage of `i2ctransfer`, was not a part of path inside `systemd` service on `NixOS` (credits @Robin-Everaars)
+- Using of co-activation modifier Alt on `X11`
+
+### Feature
+
+- Added udev option `static_node` for `uinput` which is applied immediately and not after reboot (and action remove and tag uaccess for i2c)(credits @Robin-Everaars)
+- Install and load `x11` dependencies only when are used (credits @Robin-Everaars)
+
 ## 2.4.0 (28.7.2026)
 
 ### Fixed

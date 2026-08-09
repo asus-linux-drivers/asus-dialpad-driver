@@ -1689,7 +1689,7 @@ def mod_name_to_specific_keysym_name(mod_name):
                         return key[3:]
             else:
                 return mod_to_specific_keysym_name[mod_name]
-    elif display_wayland:
+    elif display_wayland and keyboard_state:
 
         keymap = keyboard_state.get_keymap()
         num_mods = keymap.num_mods()
@@ -1938,6 +1938,7 @@ def window_was_changed(window_binary_local):
         update = True
 
     if update:
+        log.debug({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
         send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
         center_activated = False
         title = None

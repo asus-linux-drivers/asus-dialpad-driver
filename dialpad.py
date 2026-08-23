@@ -76,7 +76,7 @@ try:
 except ImportError:
     pass
 
-QDBUS = shutil.which("qdbus") or shutil.which("qdbus6")
+QDBUS = shutil.which("qdbus") or shutil.which("qdbus6") or shutil.which("qdbus-qt6")
 
 # Logging setup
 logging.basicConfig(

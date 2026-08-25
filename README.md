@@ -349,7 +349,7 @@ $ conda activate conda_env
 Python 3.11.13
 (conda_env) $ bash install.sh
 ...
-$ (conda_env) $ /usr/share/asus-numberpad-driver/.env/bin/python3 --version
+$ (conda_env) $ /usr/share/asus-dialpad-driver/.env/bin/python3 --version
 Python 3.11.13
 (conda_env) $ conda deactivate
 $

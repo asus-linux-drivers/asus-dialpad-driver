@@ -2386,7 +2386,7 @@ try:
     # Start the touchpad listener in a separate thread
     listen_touchpad_events()
 except Exception:
-    logging.exception("Listening touchpad events unexpectedly failed")
+    log.exception("Listening touchpad events unexpectedly failed")
 finally:
     cleanup()
     log.info("Exiting")

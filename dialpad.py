@@ -1674,7 +1674,8 @@ def mod_name_to_specific_keysym_name(mod_name):
             "Mod2": Xlib.X.Mod2MapIndex,
             "Mod3": Xlib.X.Mod3MapIndex,
             "Mod4": Xlib.X.Mod4MapIndex,
-            "Mod5": Xlib.X.Mod5MapIndex
+            "Mod5": Xlib.X.Mod5MapIndex,
+            "AltGr": Xlib.X.Mod5MapIndex,
         }
 
         if mod_name in mods_to_indexes_x11:
@@ -1687,6 +1688,7 @@ def mod_name_to_specific_keysym_name(mod_name):
                 for key in Xlib.XK.__dict__:
                     if key.startswith("XK") and Xlib.XK.__dict__[key] == keysym:
                         return key[3:]
+                return mod_to_specific_keysym_name[mod_name]
             else:
                 return mod_to_specific_keysym_name[mod_name]
     elif display_wayland and keyboard_state:
@@ -1729,7 +1731,7 @@ def mod_name_to_specific_keysym_name(mod_name):
 
         return mod_to_specific_keysym_name[mod_name]
     else:
-      return mod_to_specific_keysym_name[mod_name]
+        return mod_to_specific_keysym_name[mod_name]
 
 def listen_keyboard_events():
     """

@@ -692,6 +692,9 @@ gsettings_max_failure_count = 1
 qdbus_failure_count = 0
 qdbus_max_failure_count = 1
 
+if QDBUS is None:
+    qdbus_failure_count = qdbus_max_failure_count
+
 gnome_failure_count = 0
 gnome_max_failure_count = 1
 

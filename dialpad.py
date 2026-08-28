@@ -16,7 +16,7 @@ try:
     import xcffib
     import xcffib.xkb
     X11_LIBS_AVAILABLE = True
-except ImportError:
+except:
     pass
 
 from xkbcommon import xkb
@@ -25,7 +25,7 @@ from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO
 # https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/44
 try:
     from pyinotify import ThreadedNotifier as Notifier
-except ImportError:
+except:
     from pyinotify import AsyncNotifier as Notifier
 from periphery import I2C
 from typing import Optional
@@ -59,21 +59,21 @@ try:
     from pywayland.client import Display
     from pywayland.protocol.wayland import WlSeat
     PYWAYLAND_AVAILABLE = True
-except ImportError:
+except:
     pass
 
 SYSTEMD_JOURNAL_AVAILABLE = False
 try:
     from systemd.journal import JournalHandler
     SYSTEMD_JOURNAL_AVAILABLE = True
-except ImportError:
+except:
     pass
 
 PYATSPI_AVAILABLE = False
 try:
     import pyatspi
     PYATSPI_AVAILABLE = True
-except ImportError:
+except:
     pass
 
 QDBUS = shutil.which("qdbus") or shutil.which("qdbus6") or shutil.which("qdbus-qt6")

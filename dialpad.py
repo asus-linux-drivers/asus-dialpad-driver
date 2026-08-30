@@ -1703,16 +1703,25 @@ def mod_name_to_specific_keysym_name(mod_name):
             keyboard_state_clean = keymap.state_new()
             key_state = keyboard_state_clean.update_key(keycode, xkb.KeyDirection.XKB_KEY_DOWN)
 
-            num_layouts = keymap.num_layouts_for_key(keycode)
-            for layout in range(0, num_layouts):
+            key_layouts_count = keymap.num_layouts_for_key(keycode)
+            for layout in range(key_layouts_count):
 
-                if gnome_current_layout_index is not None and gnome_current_layout_index == layout:
-                    layout_is_active = True
+                current_layout_index = gnome_current_layout_index
+
+                if current_layout_index is not None:
+
+                    if key_layouts_count:
+                        layout_is_active = (current_layout_index % key_layouts_count == layout)
+                    else:
+                        layout_is_active = (current_layout_index == layout)
                 else:
-                    layout_is_active = keyboard_state_clean.layout_index_is_active(layout, xkb.StateComponent.XKB_STATE_LAYOUT_EFFECTIVE)
+                    layout_is_active = keyboard_state.layout_index_is_active(
+                        layout,
+                        xkb.StateComponent.XKB_STATE_LAYOUT_EFFECTIVE
+                    )
 
                 if layout_is_active:
-                    for mod_index in range(0, num_mods):
+                    for mod_index in range(num_mods):
 
                         is_key_mod = key_state & xkb.StateComponent.XKB_STATE_MODS_DEPRESSED
                         if is_key_mod:
@@ -1820,12 +1829,12 @@ def load_evdev_key_for_wayland(char, keyboard_state):
 
     for keycode in keymap:
 
-        num_layouts = keymap.num_layouts_for_key(keycode)
-        for layout in range(0, num_layouts):
+        key_layouts_count = keymap.num_layouts_for_key(keycode)
+        for layout in range(key_layouts_count):
 
             num_levels = keymap.num_levels_for_key(keycode, layout)
 
-            for level in range(0, num_levels):
+            for level in range(num_levels):
                 mod_masks_for_level = keymap.key_get_mods_for_level(keycode, layout, level)
 
                 if len(mod_masks_for_level) < 1:
@@ -1836,10 +1845,10 @@ def load_evdev_key_for_wayland(char, keyboard_state):
                 if len(keysyms) != 1 or keysyms[0] != keysym:
                     continue
 
-                for mod_mask_index in range(0, len(mod_masks_for_level)):
+                for mod_mask_index in range(len(mod_masks_for_level)):
 
                     mod_evdev_keys = []
-                    for mod_index in range(0, num_mods):
+                    for mod_index in range(num_mods):
 
                         if (mod_masks_for_level[mod_mask_index] & (1 << mod_index) == 0):
                             continue
@@ -1857,11 +1866,19 @@ def load_evdev_key_for_wayland(char, keyboard_state):
                     else:
                         key = EV_KEY.codes[int(keycode - 8)]
 
+                    current_layout_index = gnome_current_layout_index
 
-                    if gnome_current_layout_index is not None and gnome_current_layout_index == layout:
-                        layout_is_active = True
+                    if current_layout_index is not None:
+
+                        if key_layouts_count:
+                            layout_is_active = (current_layout_index % key_layouts_count == layout)
+                        else:
+                            layout_is_active = (current_layout_index == layout)
                     else:
-                        layout_is_active = keyboard_state.layout_index_is_active(layout, xkb.StateComponent.XKB_STATE_LAYOUT_EFFECTIVE)
+                        layout_is_active = keyboard_state.layout_index_is_active(
+                            layout,
+                            xkb.StateComponent.XKB_STATE_LAYOUT_EFFECTIVE
+                        )
 
                     enable_key(key)
 

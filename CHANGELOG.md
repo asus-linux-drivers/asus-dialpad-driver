@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.5.2 (30.8.2026)
+
+### Fixed
+
+- Fedora Qt6 `qdbus` detection (credits @pesoiq)
+- `AltGr` on X11 (e.g. czech keyboard layout use for asterisk `AltGr + KEY_8`)
+- Logging exception for main loop (credits @bub4z0r)
+- Do not specify during importing `ImportError` (e.g. `AttributeError` can occurs)
+- When is `QDBUS` not available then do not even try to send it
+- Freeze of `PyGObject<3.52` only when exists `girepository-2.0`
+- Active layout (credits @bub4z0r)
+
 ## 2.5.1 (10.8.2026)
 
 ### Fixed

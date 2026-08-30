@@ -13,7 +13,7 @@
 
 python3Packages.buildPythonPackage {
   pname = "asus-dialpad-driver";
-  version = "2.5.1";
+  version = "2.5.2";
 
   src =
     let fs = lib.fileset; in

@@ -544,7 +544,13 @@ Listening on /tmp/dialpad.sock
 
 **Stargazer evolution for the project**
 
-[![Stargazers over time](https://starchart.cc/asus-linux-drivers/asus-dialpad-driver.svg)](https://starchart.cc/asus-linux-drivers/asus-dialpad-driver)
+<a href="https://star-history.dera.page/#asus-linux-drivers/asus-dialpad-driver">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=asus-linux-drivers/asus-dialpad-driver&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=asus-linux-drivers/asus-dialpad-driver" />
+   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=asus-linux-drivers/asus-dialpad-driver" />
+ </picture>
+</a>
 
 **Buy me a coffee**
 

@@ -239,8 +239,8 @@ in
     defaultConfig = { /* … */ };
     # Overwrite any default env var
     environment = {
-        LOG = "DEBUG";
-        XDG_SESSION_TYPE = "wayland";
+      LOG = "DEBUG";
+      XDG_SESSION_TYPE = "wayland";
     };
   };
 }

@@ -85,6 +85,21 @@ in {
         It’s recommended to use a user-level configuration manager for this file or manually define with `lib.generators.toINI { } { /* your config */ }`.
       '';
     };
+
+    environment = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {
+        LOG = "INFO";
+        XDG_RUNTIME_DIR = "/run/user/1000";
+        DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus";
+        DISPLAY = ":0";
+        WAYLAND_DISPLAY = "wayland-0";
+        XDG_SESSION_TYPE = "wayland";
+      };
+      description = ''
+        Environment variables passed to the Asus DialPad Driver daemon.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -116,11 +131,11 @@ in {
         RestartSec = 1;
         TimeoutSec = 5;
         WorkingDirectory = "${package}/share/asus-dialpad-driver";
-        Environment = [
-          "LOG=INFO"
-        ];
+        Environment = lib.mapAttrsToList
+          (name: value: "${name}=${value}")
+          cfg.environment;
       };
-      path = [ pkgs.i2c-tools ];
+      path = [ pkgs.i2c-tools pkgs.qt6.qttools ];
     };
 
   };

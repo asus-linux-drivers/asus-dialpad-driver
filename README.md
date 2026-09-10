@@ -237,6 +237,11 @@ in
     daemon.enable = true; # default
     layout = "proartp16"; # default
     defaultConfig = { /* … */ };
+    # Overwrite any default env var
+    environment = {
+        LOG = "DEBUG";
+        XDG_SESSION_TYPE = "wayland";
+    };
   };
 }
 ```

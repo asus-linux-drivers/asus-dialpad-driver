@@ -123,6 +123,7 @@ in {
       serviceConfig = {
         Type = "simple";
         ConfigurationDirectory = "asus-dialpad-driver";
+        ExecStartPre = "${pkgs.bash}/bin/bash -c 'test -e %E/asus-dialpad-driver/dialpad_dev || cp ${defaultConfigFile} %E/asus-dialpad-driver/dialpad_dev'";
         ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} %E/asus-dialpad-driver/";
         # The script logs to the journal directly
         StandardOutput = "null";

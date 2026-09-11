@@ -4,7 +4,7 @@ let
   cfg = config.hardware.asus-dialpad-driver;
 
   defaultConfigFile =
-    pkgs.writeText "asus-dialpad-driver-default-config.ini" /* ini */ ''
+    pkgs.writeText "dialpad_dev" ''
       ; vim: filetype=dosini
       ; Asus DialPad configuration
       ${lib.generators.toINI { } cfg.defaultConfig}

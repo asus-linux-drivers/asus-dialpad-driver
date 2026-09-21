@@ -36,6 +36,7 @@ import configparser
 import ast
 import signal
 import mmap
+import fcntl
 import shutil
 import glob
 import socket
@@ -199,6 +200,7 @@ touchpad_name: Optional[str] = None
 device_id: Optional[str] = None
 keyboard_device_id: Optional[str] = None
 device_addr: Optional[int] = None
+hidraw_path: Optional[str] = None
 keyboard: Optional[str] = None
 
 # Constants
@@ -286,6 +288,16 @@ while try_times > 0:
 
     sleep(try_sleep)
 
+# Is the hidraw node of the touchpad usable? (preferred way, I2C is a fallback)
+if hidraw_path:
+    try:
+        with open(hidraw_path, "rb+", buffering=0) as f:
+            pass
+        log.debug(f"Successfully opened {hidraw_path}")
+    except Exception as e:
+        log.debug("Can not open %s: %s, I2C will be used", hidraw_path, e)
+        hidraw_path = None
+
 # Open a handle to "/dev/i2c-x", representing the I2C bus
 path = f"/dev/i2c-{device_id}"
 try:
@@ -301,13 +313,11 @@ except Exception as e:
             pass
         log.debug("Successfully opened I2C bus via raw open() at %s", path)
     except Exception as e2:
-        log.error(
-            "Can not open the I2C bus connection (id: %s) at %s: %s",
-            device_id,
-            path,
-            e2,
-        )
-        sys.exit(1)
+        if hidraw_path:
+            log.debug("Can not open the I2C bus connection (id: %s): %s, only hidraw will be used", device_id, e2)
+        else:
+            log.error("Can not open the I2C bus connection (id: %s): %s", device_id, e2)
+            sys.exit(1)
 
 # Config
 CONFIG_FILE_NAME = "dialpad_dev"
@@ -525,6 +535,40 @@ def load_all_config_values():
 
     if enabled is not dialpad:
         toggle_top_right_icon(dialpad)
+
+def send_value_to_touchpad_via_hidraw(value):
+    global hidraw_path
+
+    if not hidraw_path:
+        return False
+
+    # The same command as is sent via I2C below, only without the hand-made
+    # I2C-HID SET_REPORT header (0x05 0x00 0x3d 0x03 0x06 0x00 0x07 0x00) which
+    # is added by the kernel: feature report with id 0x0d
+    data = bytearray([0x0d, 0x14, 0x03, int(value, 16), 0xad])
+
+    # HIDIOCSFEATURE(len) = _IOC(_IOC_READ | _IOC_WRITE, 'H', 0x06, len)
+    HIDIOCSFEATURE = 0xC0000000 | (len(data) << 16) | (ord('H') << 8) | 0x06
+
+    try:
+        with open(hidraw_path, "rb+", buffering=0) as f:
+            fcntl.ioctl(f, HIDIOCSFEATURE, data)
+        log.debug("Feature report sent via %s", hidraw_path)
+        return True
+    except Exception as e:
+        log.debug("hidraw (%s) failed: %s; falling back to I2C", hidraw_path, e)
+        # do not try again, e.g. missing permissions will not fix themselves
+        hidraw_path = None
+
+    return False
+
+def send_value_to_touchpad(value):
+    # https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/224
+    # https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/315
+    if send_value_to_touchpad_via_hidraw(value):
+        return True
+
+    return send_value_to_touchpad(value)
 
 def send_value_to_touchpad_via_i2c(value):
     global device_id, device_addr
@@ -983,9 +1027,9 @@ def activate_dialpad():
     global dialpad, multi_app_mode_titles, multi_app_mode_icons
 
     # unlock
-    send_value_to_touchpad_via_i2c("0x60")
+    send_value_to_touchpad("0x60")
     # activate
-    send_value_to_touchpad_via_i2c("0x01")
+    send_value_to_touchpad("0x01")
 
     config_set(CONFIG_ENABLED, True)
 
@@ -1003,9 +1047,9 @@ def deactivate_dialpad():
     global dialpad
 
     # lock
-    send_value_to_touchpad_via_i2c("0x61")
+    send_value_to_touchpad("0x61")
     # deactivate
-    send_value_to_touchpad_via_i2c("0x00")
+    send_value_to_touchpad("0x00")
 
     config_set(CONFIG_ENABLED, False)
 

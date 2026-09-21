@@ -105,11 +105,25 @@ echo 'ACTION!="remove", KERNEL=="i2c-[0-9]*", SUBSYSTEM=="'"$I2C_SUBSYSTEM"'", T
   | sudo tee "$INSTALL_UDEV_DIR_PATH"/rules.d/99-asus-dialpad-driver-i2c-dev.rules >/dev/null
 echo "i2c-dev" | sudo tee /etc/modules-load.d/i2c-dev-asus-dialpad-driver.conf >/dev/null
 
-if [[ $? != 0 ]]; then
-    echo "Something went wrong when adding uinput module to auto loaded modules"
-    exit 1
+# create hidraw udev rule (hidraw node of the touchpad is the preferred way how to control
+# the NumberPad backlight, I2C above is used as a fallback)
+#
+# https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/224
+# https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/315
+#
+# the rule has to be processed before 73-seat-late.rules so that the tag uaccess has an effect
+TOUCHPAD_PHYS=$(grep -A5 -i touchpad /proc/bus/input/devices | grep -o 'Phys=i2c-[^[:space:]]*' | cut -d= -f2 | sort -u)
+
+if [ -n "$TOUCHPAD_PHYS" ]; then
+    echo 'ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="'"$TOUCHPAD_PHYS"'", TAG+="uaccess", GROUP="i2c", MODE="0660"' \
+      | sudo tee "$INSTALL_UDEV_DIR_PATH"/rules.d/70-asus-dialpad-driver-hidraw.rules >/dev/null
 else
-    echo "uinput module added to auto loaded modules"
+    echo "Touchpad Phys not detected, skipping adding hidraw udev rule"
+fi
+
+if [[ $? != 0 ]]; then
+    echo "Something went wrong during adding uinput, i2c-dev modules to auto loaded modules or during adding associated udev rules"
+    exit 1
 fi
 
 sudo udevadm control --reload-rules && sudo udevadm trigger --sysname-match=uinput && sudo udevadm trigger --attr-match=subsystem=i2c-dev

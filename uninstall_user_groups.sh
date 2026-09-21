@@ -20,8 +20,12 @@ if [[ $? != 0 ]]; then
     echo "Something went wrong when removing the uinput conf"
 fi
 
-sudo udevadm control --reload-rules && sudo udevadm trigger --sysname-match=uinput
+sudo rm -f $INSTALL_UDEV_DIR_PATH/rules.d/70-asus-numberpad-driver-hidraw.rules
+if [[ $? != 0 ]]; then
+    echo "Something went wrong when removing the hidraw udev rule"
+fi
 
+sudo udevadm control --reload-rules && sudo udevadm trigger --sysname-match=uinput && sudo udevadm trigger --subsystem-match=hidraw
 if [[ $? != 0 ]]; then
     echo "Something went wrong when reloading or triggering uinput udev rules"
 else

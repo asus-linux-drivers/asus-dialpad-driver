@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
+set -o pipefail
+
 source non_sudo_check.sh
+source install_common.sh
+dialpad_init_paths || exit 1
 
 source install_security_check.sh
 
@@ -77,7 +81,7 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
         fi
     elif command -v pacman >/dev/null 2>&1; then
         PACKAGE_MANAGER="pacman"
-        sudo pacman --noconfirm --needed -S ibus libevdev curl i2c-tools python python-virtualenv python-pyatspi libxml2 libxkbcommon gcc pkgconf
+        sudo pacman --noconfirm --needed -S ibus libevdev curl i2c-tools python python-virtualenv python-atspi libxml2 libxkbcommon gcc pkgconf
         if [ "$XDG_SESSION_TYPE" == "x11" ]; then
             sudo pacman --noconfirm --needed -S xorg-xinput
         fi
@@ -226,46 +230,16 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
 
     echo
 
-    # do not install __pycache__
-    if [[ -d layouts/__pycache__ ]]; then
-        sudo rm -rf layouts/__pycache__
-    fi
-
-    # ENV VARS
-    if [ -z "$INSTALL_DIR_PATH" ]; then
-      INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
-    fi
-    if [ -z "$CONFIG_FILE_DIR_PATH" ]; then
-      CONFIG_FILE_DIR_PATH="$INSTALL_DIR_PATH"
-    fi
-    if [ -z "$CONFIG_FILE_NAME" ]; then
-      CONFIG_FILE_NAME="dialpad_dev"
-    fi
-    CONFIG_FILE_PATH="$CONFIG_FILE_DIR_PATH/$CONFIG_FILE_NAME"
-
-    sudo mkdir -p "$INSTALL_DIR_PATH/layouts"
-    sudo install dialpad.py "$INSTALL_DIR_PATH"
-    sudo install -t "$INSTALL_DIR_PATH/layouts" layouts/*.py
-    sudo chown -R $USER "$INSTALL_DIR_PATH"
+    # Runtime data and all shared modules must be available before any config writer.
+    # Existing layouts, configuration and recovery are deliberately preserved.
+    dialpad_install_backend || exit 1
+    install -m 644 -- dialpad.py dialpad_runtime.py "$INSTALL_DIR_PATH/" || exit 1
 
     if [[ -f "$CONFIG_FILE_PATH" ]]; then
-        read -r -p "In system remains config file from previous installation. Do you want replace that config with default config? [y/N]" RESPONSE
-        case "$RESPONSE" in [yY][eE][sS]|[yY])
-
-            # default will be autocreated, that is why is removed
-            sudo rm -f $CONFIG_FILE_PATH
-            if [[ $? != 0 ]]; then
-                echo "$CONFIG_FILE_PATH cannot be removed correctly..."
-                exit 1
-            fi
-            ;;
-        *)
-            source install_config_send_anonymous_report.sh
-            ;;
-        esac
+        echo "Preserving configuration: $CONFIG_FILE_PATH"
+        source install_config_send_anonymous_report.sh
     else
-        echo "Default config will be autocreated during the first run and available for futher modifications here:"
-        echo "$CONFIG_FILE_PATH"
+        echo "Configuration defaults will be created on first run: $CONFIG_FILE_PATH"
     fi
 
     echo
@@ -277,8 +251,8 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
     fi
 
     # xcffib (https://pypi.org/project/xcffib/) requires python >=3.10
-    if ! $PYTHON -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"; then
-        PYTHON_VERSION=$($PYTHON -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
+    if ! "$PYTHON" -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"; then
+        PYTHON_VERSION=$("$PYTHON" -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
         echo "Python >= 3.10 is required (found $PYTHON_VERSION)."
         echo "Please install Python 3.10 or higher before continuing."
         exit 1
@@ -294,8 +268,8 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
     fi
 
     # create Python virtual environment
-    virtualenv --python="$PYTHON" --system-site-packages "$INSTALL_DIR_PATH/.env"
-    source $INSTALL_DIR_PATH/.env/bin/activate
+    virtualenv --python="$PYTHON" --system-site-packages "$INSTALL_DIR_PATH/.env" || exit 1
+    source "$INSTALL_DIR_PATH/.env/bin/activate"
     pip3 install --upgrade pip
     pip3 install --upgrade setuptools
 
@@ -330,25 +304,18 @@ LOGS_INSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_INSTALL_LOG_FILE_NAME"
 
     echo
 
-    if [ -z "$LAYOUT_NAME" ]; then
-
-      source install_layout_auto_suggestion.sh
-
-      echo
-
-      if [ -z "$LAYOUT_NAME" ]; then
-
-        source install_layout_select.sh
-
-        echo
-      fi
-    fi
+    dialpad_install_launchers || exit 1
+    source install_layout_select.sh
 
     source install_coactivator_select.sh
 
     echo
 
     source install_user_interface.sh
+
+    echo
+
+    source install_layout_manager.sh
 
     echo
 

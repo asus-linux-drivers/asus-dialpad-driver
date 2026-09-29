@@ -39,12 +39,14 @@ If you find this project useful, please do not forget to give it a [![GitHub sta
 - Driver (including backlighting if hardware supported) installed for the current user
 - Driver creates own virtual environment of currently installed version of `Python3`
 - Multiple pre-created [DialPad layouts](https://github.com/asus-linux-drivers/asus-dialpad-driver#layouts) with the possibility of [creating custom layouts or improving existing ones (circle_diameter, center_button_diameter, circle_center_x..)](https://github.com/asus-linux-drivers/asus-dialpad-driver#keyboard-layout)
+- Optional [Layout Manager](#layout-manager-and-json-presets) for structured shortcut editing, hardware geometry, import/export, and revision-confirmed layout switching without editing service units
+- JSON presets and statically readable Python layouts, with gesture-safe hot reload and validated last-successful recovery
 - Customization through 2-way sync [configuration file](https://github.com/asus-linux-drivers/asus-dialpad-driver#configuration-file) (when `$ bash ./install.sh` is run, changes previously made in the config file will not be overwritten without user permission, similarly when `$ bash ./uninstall.sh` is run the config file will be kept. In either case, when the config file or parts of it do not exist they will be automatically created or completed with default values)
 - Automatic DialPad layout detection
 - Activation/deactivation of DialPad by pressing and holding the top-right icon (activation time by default is 1s)
 - Optional co-activator key requirement (`Shift`, `Control`, `Alt`) to prevent accidental DialPad activation
 - Recognize of currently focused app by binary path (e.g. `/usr/share/code/code`) or part of the title (during finding the first matched shortcut wins so `visual studio code` defined after `code` will be never be matched)
-- For each configured app a possibility to define single-function or multi-function mode (when is app not recognized is used `None` block)
+- Per-application single-function or multifunction mappings; unmatched applications use the required `none` mapping, while an explicitly empty matched mapping stays empty
 - Single-function mode (distinction of shortcuts for each app is possible only by key modifier like `Shift`; for each shortcut is possible to use `clockwise`, `counterclockwise` or `center`)
 - Adding events with `EV_KEY` which contain press and release events (e.g. key volume up, down and mute: `EV_KEY.KEY_VOLUMEUP, EV_KEY.KEY_VOLUMEDOWN, EV_KEY.KEY_MUTE`)
 
@@ -70,7 +72,7 @@ app_shortcuts = {
 }
 ```
 
-- Multi-function mode (not possible to use `center` because middle button is used as configuration button / return button between functions; by default is grid of circle rendered for 5 apps `slices_minimum_count=5`)
+- Multi-function mode uses the center control to confirm/leave a selected function. The ring is padded to `slices_minimum_count` (default: 4).
 - Using `EV_REL` with values (e.g. scrolling: `EV_REL.REL_WHEEL, EV_REL.REL_WHEEL_HI_RES` and values: `-1, -120`)
 
 ```
@@ -236,6 +238,7 @@ in
     # Enable user-level systemd service
     daemon.enable = true; # default
     layout = "proartp16"; # default
+    layoutManager.enable = true; # optional; false by default, independent of overlay
     defaultConfig = { /* … */ };
     # Overwrite any default env var
     environment = {
@@ -294,6 +297,10 @@ Then you can enable the service, `services.asus-dialpad-driver`, in your `config
 
 ## Uninstallation
 
+Configuration, user layouts, bundled-layout customizations, and `.layout-state/` recovery data are preserved by default, including when configuration and installation share a directory. The installer records a custom configuration directory in `.installation.json`; reinstall/uninstall reads that path unless explicitly overridden. Removing program files also removes unchanged recorded CLI/manager launchers and desktop entries. Modified launchers are retained.
+
+The uninstaller offers an explicit `PURGE` confirmation for deleting the selected configuration/layout/recovery data. Back up custom layouts first. It does not delete an entire configuration directory that may contain unrelated files.
+
 To uninstall run
 
 ```bash
@@ -320,6 +327,178 @@ $ bash uninstall_service.sh
 $ bash uninstall_user_groups.sh
 ```
 
+## Layout Manager and JSON presets
+
+Requires Python 3.10+. The independent editor uses the optional `requirements.ui.txt` dependency group (PySide6); the driver and portable layout library do not import Qt.
+
+### Install and launch
+
+The ordinary installer offers the manager and floating overlay separately. To install just the editor, without provisioning input devices or enabling either service:
+
+```bash
+INSTALL_DIR_PATH="$HOME/.local/share/asus-dialpad-driver" \
+CONFIG_FILE_DIR_PATH="$HOME/.config/asus-dialpad-driver" \
+bash install_layout_manager.sh
+
+"$HOME/.local/bin/asus-dialpad-layout-manager"
+```
+
+Run installer scripts from this checkout as a normal user, not with `sudo bash`. The standalone manager installer needs Python venv support; it installs the shared model, catalogs, layouts, Qt dependencies, and both editor modules. The desktop entry starts the same launcher. `DIALPAD_BIN_DIR_PATH` and `DIALPAD_APPLICATIONS_DIR_PATH` override launcher/desktop destinations.
+
+For an existing driver, use **its actual configuration directory**, including a custom `CONFIG_FILE_DIR_PATH`. Ordinary installation defaults to `/usr/share/asus-dialpad-driver`; Nix uses the user's XDG config directory under `asus-dialpad-driver`. Multiple directories represent separate driver instances, not interchangeable fallback locations.
+
+From a checkout:
+
+```bash
+python3 dialpad_layout_manager.py --config-dir /absolute/config/directory
+# No Linux adapter or live endpoint is used:
+python3 dialpad_layout_manager.py --config-dir /absolute/config/directory --offline
+```
+
+Source CLI/GUI entry points require `--config-dir` or `DIALPAD_CONFIG_DIR`; they never guess among existing directories. Installed ordinary launchers embed the selected directory and accept an explicit `--config-dir` override. Nix launchers use `DIALPAD_CONFIG_DIR`, otherwise `${XDG_CONFIG_HOME:-$HOME/.config}/asus-dialpad-driver`.
+
+On NixOS, set `hardware.asus-dialpad-driver.layoutManager.enable = true`; this can also be enabled without the hardware/daemon for offline editing. The derivation exposes `layoutManagerSupport`, defaulting to `false`. Headless packages have no PySide6 dependency. The floating overlay remains a separate optional application.
+
+### Editing workflow
+
+1. Select a hardware template and **Copy** a bundled preset to a distinct user identifier. Built-ins are read-only in the editor, even if their directory is writable.
+2. Edit ordered application rules, direct/shared controls, and named functions. Switching single/multifunction editor views preserves both sets of bindings. The key picker supports searching event names, modifier conditions, timing, commands, labels, icons, value queries, and thresholds.
+3. Geometry uses **absolute touchpad coordinates, not screen pixels**. Numeric controls and canvas handles move/resize the circle, center button, and activation region. Without driver-reported extents the canvas is explicitly schematic, not calibrated. Ordinary shortcut editing does not require geometry changes.
+4. **Preview tool ring** opens the static preview, using the same 275-by-275 logical-pixel renderer as the floating overlay. It follows function order clockwise from the top, including `slices_minimum_count` padding, without running commands.
+5. **Validate** and **Save** the document. Save does not change the selected identifier. Saving a file already in use requests a reload and is labeled/warned accordingly.
+6. **Activate saved revision** requests selection, then displays the actual driver's acknowledgment. Unsaved draft, saved revision, requested revision, and applied revision are distinct states. Closing the manager leaves the driver running.
+
+Named functions are the floating overlay's tool-ring entries, not a separate collection to configure. In **Multifunction / named functions**, use **Add function**, **Up/Down**, and **Command / display metadata…** to edit their order, labels, icons, units, and value queries. The bundled `proartp16` preset's `none` fallback uses direct controls; its named-function example is attached to `/usr/share/code/code`. To make a ring available outside that application, edit the appropriate application rule in a user copy.
+
+The preview resolves each function's base `icon` as a local file or an icon-theme name. Missing or unreadable icons fall back to the display title; long labels wrap to two lines and use an ellipsis for overflow. Hovering the canvas exposes the full tool labels. The preview uses a neutral background, whereas the live overlay retains desktop transparency, so compositor effects and background contrast can differ.
+
+Previewing never binds the feedback socket, executes commands/value queries, or evaluates conditional icon queries. It shows base icons rather than guessing a query result, and does not simulate live numeric values or gesture progress. Overlay window size and colors are not touchpad geometry settings and are not edited by the geometry canvas.
+
+Raw JSON is a separate editable draft. **Apply JSON to forms** validates before replacing structured data; invalid text remains intact. Navigation offers Save/Discard/Cancel. External file changes are not silently overwritten: reload the external file or save a new copy. Import/export preserve ordering and do not execute Python or shell commands.
+
+Rename/deletion retains the original until the same driver instance acknowledges the exact replacement revision. Concurrent activation/removal uses the configuration sidecar transaction. Without live status these destructive operations refuse safely; copying and exporting remain available. Canceling a pending removal retains the original but does not undo an already persisted replacement request.
+
+### Files, identity, and selection
+
+The driver searches `<config_dir>/layouts/` before `<driver_install_dir>/layouts/`, deduplicating equivalent directories. Within each directory, `<id>.json` wins over `<id>.py`; directory priority comes first. An invalid higher-priority file is an error, not permission to load a lower-priority file silently.
+
+Identifiers match `[A-Za-z0-9][A-Za-z0-9_-]*`. The optional JSON `name` is only a display label and never a file path. The installed `bundled-layouts.json` manifest identifies protected built-in files independently of directory permissions, including configurations that share the install directory. User copies use distinct identifiers by default.
+
+Selection precedence:
+
+1. Nonempty `[main] layout` in `<config_dir>/dialpad_dev`.
+2. The driver's existing first positional layout argument.
+3. A clear error if neither exists and no valid last-successful recovery is available.
+
+The argv fallback is **not persisted** as an explicit selection. Nix `cfg.layout` therefore remains effective unless an explicit user selection overrides it. Clear `layout` to return to that default. Reinstallation preserves an existing explicit selection; selecting a new layout deliberately patches just `layout`.
+
+All cooperating configuration writers use a stable `.dialpad_dev.lock`, read the latest file under the lock, merge only changed keys/missing defaults, and atomically replace the INI file. Unrelated keys and sections survive simultaneous `layout` and `enabled` changes. Malformed configuration is reported, not replaced with defaults.
+
+### JSON schema and compatibility
+
+Version 1 contains `schema_version`, `geometry`, `app_shortcuts`, and optional `name`:
+
+```json
+{
+  "schema_version": 1,
+  "name": "My ProArt",
+  "geometry": {
+    "top_right_icon_width": 250,
+    "top_right_icon_height": 250,
+    "circle_diameter": 919,
+    "center_button_diameter": 364,
+    "circle_center_x": 586,
+    "circle_center_y": 573
+  },
+  "app_shortcuts": {
+    "firefox": {},
+    "none": {
+      "center": [{"key": "KEY_MUTE", "trigger": "release", "duration": 0.5}],
+      "clockwise": [{
+        "key": ["REL_WHEEL", "REL_WHEEL_HI_RES"],
+        "value": [1, 120], "trigger": "immediate", "title": "Scroll"
+      }],
+      "counterclockwise": [{
+        "key": ["REL_WHEEL", "REL_WHEEL_HI_RES"],
+        "value": [-1, -120], "trigger": "immediate", "title": "Scroll"
+      }]
+    }
+  }
+}
+```
+
+- `center`, `clockwise`, and `counterclockwise` contain an action object or ordered action list. Other profile keys name functions; a function can contain rotation/center actions, metadata, or only a `command`.
+- `key` is an event-name string or ordered combination. `KEY_`/`BTN_` keys produce a complete press/release sequence; `REL_` events require a corresponding array of signed 32-bit integer `value`s. Mixing key and relative events in one action is rejected.
+- A string `value` is a shell display-value query, not an event value. It is supported on key/command/control metadata and functions, but cannot replace a relative event's numeric values. The runtime separates these meanings during compilation.
+- `command` runs a shell action and can accompany keys. A trigger/duration-only center entry is a valid selection control. Command-only functions need no invented rotation bindings.
+- `trigger` is `release` (default) or `immediate`; `duration` is a nonnegative hold duration in seconds. `modifier` is a single key/button event condition. Modifier-specific alternatives take precedence, preserving their original relative order; unmodified alternatives match when no configured shortcut modifier is held.
+- `title`, `icon`, `icons` (query-result-to-icon mapping), `unit`, and historical `treshold` provide metadata. A display title is not a selected function identifier; labels such as `Scroll` do not require a function with that name.
+- Application matching preserves the existing ordered, case-sensitive rule keys against lowercased binary/title strings: the first binary substring match wins, then the first title substring match, then `none`. Use lowercase rule keys. An explicitly empty matched rule disables its bindings rather than falling back.
+- Rule, function, and action order is preserved by serialization. Unknown fields, duplicate JSON keys, unsupported schema versions, non-finite geometry, invalid event/value combinations, and missing `none` are errors with field paths. Missing device information does not block offline validation.
+
+The portable picker uses `dialpad_events.json`, generated from Linux UAPI `input-event-codes.h` without loading a native library:
+
+```bash
+python3 tools/generate_event_catalog.py /usr/include/linux/input-event-codes.h
+```
+
+The catalog records its source hash. The Linux adapter additionally resolves every event against the installed `libevdev`; a newer catalog cannot make an older runtime support an unavailable event.
+
+### CLI and trust boundaries
+
+```bash
+python3 dialpad_layout.py --config-dir /absolute/config list --json
+python3 dialpad_layout.py --config-dir /absolute/config validate proartp16
+python3 dialpad_layout.py --config-dir /absolute/config convert proartp16 /absolute/config/layouts/my_proart.json
+python3 dialpad_layout.py --config-dir /absolute/config export my_proart /tmp/my_proart.json
+python3 dialpad_layout.py --config-dir /absolute/config activate my_proart
+python3 dialpad_layout.py --config-dir /absolute/config status
+# Installed launcher already supplies its configured directory:
+asus-dialpad-layout config-set enabled 1
+```
+
+`activate` writes a request; its output is not an acknowledgment. `status` reports the live instance. Listing, static validation, conversion, JSON editing, and previews use only portable data and never execute a layout or its shell commands.
+
+The shipped Python layouts use the supported literal-assignment/known-event AST subset. Unsupported dynamic files are left unchanged, not guessed or silently converted. For an explicitly trusted external Python file, use the CLI's `--trusted-python` conversion option (see `convert --help`); the manager offers explicit trusted conversion for installed Python files. Trusted execution uses the exact source bytes used for the revision, not a timestamp-cached `.pyc`.
+
+Dynamic Python in the driver itself requires appending `--trusted-python` after its positional layout and configuration-directory arguments. It executes as your user. Imported helper modules are not automatically reloaded, and failed candidates cannot undo Python or shell side effects. Character/keysym bindings that cannot be converted losslessly fail explicitly; retain the original Python source. The GUI's command-trust confirmation does not authorize dynamic Python execution in the driver.
+
+The editor can edit/export JSON without `libevdev`, `fcntl`, pyinotify, a running driver, or Linux session integration. Activation is disabled offline/on non-Linux platforms. Linux command strings and icon paths are not made portable by using Qt; Windows/macOS execution still requires separate platform verification.
+
+### Keyboard selection and session keymaps
+
+Modifier conditions use one typing-capable input keyboard selected at driver startup. Selection checks the kernel's key capabilities rather than requiring an ASUS product-name match. Previously recognized AT/ASUS keyboards retain priority; otherwise the first qualifying device is used. Uinput devices under `/devices/virtual/input/` are excluded so virtual output is not fed back as physical modifier input. Bluetooth HID keyboards remain eligible.
+
+GNOME input-source polling runs only for a matching desktop session, not merely because `gsettings` is installed. The parser accepts typed empty GVariant lists and does not pass input-method engine identifiers to `setxkbmap`. Native Wayland/X11 keymap listeners remain independent of this GNOME-specific polling.
+
+### Hot reload, status, and recovery
+
+The input owner commits a prepared snapshot only at a complete input-frame boundary after every contact/MT slot has ended and the old gesture's release actions have completed. Window/keymap updates follow the same ownership rule. An idle loop is woken for changes; a held finger or synchronous action can keep a valid request **pending**. Invalid candidates retain the old usable mapping/output device. A complete key press/release sequence always pins one output device.
+
+Retired output devices and stale, unpublished candidates are explicitly destroyed; shutdown also releases the active device. The driver does not rely on Python cyclic garbage collection to remove old uinput devices from the compositor.
+
+The read-only status socket is per configuration directory under `$XDG_RUNTIME_DIR/asus-dialpad-driver/`, with current-user-only permissions and peer checks. It is independent of the floating overlay's `/tmp/dialpad.sock`, supports multiple clients, and needs no systemd service. Missing/unreachable status means unavailable, never successful activation. Duplicate live owners of one instance are rejected; the manager never removes another process's endpoint.
+
+Status distinguishes `pending`, `applied`, `rejected`, and `recovered`, with instance identity, request generation, requested/applied source revisions, device geometry when known, and recovery durability. Dynamic metadata results are fenced against newer snapshots and selections. Structural publication does not run value-query commands under device/publication locks.
+
+After a successful commit, normalized executable-code-free layout data and provenance are saved in `<config_dir>/.layout-state/last-successful.json`. The recovery write fsyncs the file before atomic replacement and the directory afterward. If persistence fails, the live revision remains applied but `recovery_current` is false and `recovery_error` explains why; this is not reported as runtime rollback.
+
+Startup first attempts the requested layout. If loading/compilation fails, it validates and uses the last-successful snapshot when possible, reports recovery explicitly, and leaves the requested selection unchanged. No unrelated built-in is chosen silently. If neither requested nor recovered data is usable, startup fails clearly.
+
+For troubleshooting, compare the manager's **saved revision** with `asus-dialpad-layout status`, check the reported configuration path, release all contacts for a pending request, and inspect the rejection/recovery error before changing files. A service restart is not the hot-reload mechanism and is never used automatically to conceal rejection.
+
+### Development verification
+
+From a prepared Python environment, run the deterministic behavioral regressions:
+
+```bash
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
+```
+
+Qt editor tests require `requirements.ui.txt`; without PySide6 they are skipped. Tests use temporary files and fake output devices, not real input injection or I2C. They do not import `dialpad.py`, run installer provisioning, or manipulate services. Native event resolution additionally requires the Linux driver dependencies.
+
+Actual GUI workflows must also be exercised on a graphical session. Hardware gesture delivery, compositor recognition of recreated uinput devices, Nix builds/VM checks, and Windows/macOS execution require their respective environments; regression success alone does not establish those capabilities.
+
 ## Layouts
 
 Layouts below are named by laptop models, but the name is not important. What is important is their visual appearance because they are repeated on multiple laptop models across series. The install script should recognize the correct one automatically for your laptop. If yours was not recognized, please create issue.
@@ -336,7 +515,7 @@ Layouts below are named by laptop models, but the name is not important. What is
 **How to start DialPad without systemd service?**
 
 - install in standard way using `bash install.sh` and answer no to the question about using `systemd`
-- layout name is required as first argument and as second argument can be optionally passed path to directory where will be autocreated config `dialpad_dev` (default is current working directory):
+- The first positional layout argument remains a fallback; nonempty `[main] layout` takes precedence. The second argument selects the configuration directory (default: current directory). The directory no longer requires a trailing slash.
 
 ```
 /usr/share/asus-dialpad-driver/.env/bin/python3 /usr/share/asus-dialpad-driver/dialpad.py <asusvivobook16x|proartp16|..>
@@ -371,9 +550,9 @@ $ apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadli
 $ curl https://pyenv.run | bash
 
 # install & change to the Python version for which one do you want to install the driver
-$ CC=clang pyenv install 3.9.4
-$ pyenv global 3.9.4 # change as global
-$ # pyenv local 3.9.4 # will create file .python-version inside source dir so next (re)install will be used automatically saved Python version in this file
+$ CC=clang pyenv install 3.11.13
+$ pyenv global 3.11.13 # change as global
+$ # pyenv local 3.11.13 # creates .python-version for subsequent installation
 
 # install the driver
 $ bash install.sh
@@ -384,28 +563,27 @@ $ pyenv global system
 
 **How can DialPad be activated via CLI?**
 
-- directly just change `enabled` in the appropriate lines of the config file:
+Use the shared patch transaction so other clients' layout/settings changes are preserved:
 
-```
-# enabling DialPad via command line
-sed -i "s/enabled = 0/enabled = 1/g" dialpad_dev
-sed -i "s/enabled = 0/enabled = 1/g" /usr/share/asus-dialpad-driver/dialpad_dev
-# disabling
-sed -i "s/enabled = 1/enabled = 0/g" dialpad_dev
-sed -i "s/enabled = 1/enabled = 0/g" /usr/share/asus-dialpad-driver/dialpad_dev
+```bash
+# Installed launcher uses the driver's configured directory.
+asus-dialpad-layout config-set enabled 1
+asus-dialpad-layout config-set enabled 0
+# From a checkout, provide the same directory explicitly.
+python3 dialpad_layout.py --config-dir /absolute/config config-set enabled 1
 ```
 
 ## Configuration
 
 ### Keyboard layout
 
-During the install process `bash ./install.sh`, you're required to select your keyboard layout:
+During installation, select a DialPad hardware template/preset, not a keyboard-language layout. The selector lists installed JSON/Python identifiers and preserves an existing explicit selection by default:
 
 ```
 ...
-1) asusvivobook16x.py
-2) proartp16.py
-3) zenbookpro14.py
+1) asusvivobook16x
+2) proartp16
+3) zenbookpro14
 4) Quit
 Please enter your choice
 ...
@@ -414,12 +592,12 @@ Please enter your choice
 | Option                                        | Required | Default           | Description |
 | --------------------------------------------- | -------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Position of DialPad**                                |          |
-| `circle_diameter`                                        | Required |                   | in px
-| `center_button_diameter`                                        | Required |                   | in px
-| `circle_center_x`                                        | Required |                   | in px
-| `circle_center_y`                                        | Required |                   | in px
+| `circle_diameter`                                        | Required |                   | absolute touchpad coordinates
+| `center_button_diameter`                                        | Required |                   | absolute touchpad coordinates
+| `circle_center_x`                                        | Required |                   | absolute touchpad coordinates
+| `circle_center_y`                                        | Required |                   | absolute touchpad coordinates
 | **Associated apps**                                |          |          |
-| `app_shortcuts`                                        | Optional | Yes                  | | required format like in `default` layout
+| `app_shortcuts`                                        | Required |                   | ordered application mappings with required `none` fallback
 
 ### Co-activator keys
 
@@ -445,33 +623,34 @@ top_right_icon_coactivator_key = Alt
 
 ### Configuration file
 
-Attributes which do not depend on a specific DialPad keyboard can be changed according to the table below in the config `dialpad_dev` in the installed driver location `/usr/share/asus-dialpad-driver`. See the example below showing the default attibutes:
+Settings live in `<config_dir>/dialpad_dev` (`/usr/share/asus-dialpad-driver/dialpad_dev` for a default ordinary installation; the XDG configuration directory on Nix). Use `config-set` for concurrent-safe changes. Example:
 
 ```
 [main]
-disable_due_inactivity_time = 0
+disable_due_inactivity_time = 120
 touchpad_disables_dialpad = 1
 activation_time = 1
 enabled = 0
 socket_enabled = 1
 top_right_icon_coactivator_key = Alt
 default_treshold = 90
-slices_minimum_count = 5
+slices_minimum_count = 4
 ```
 
 | Option                                        | Required | Default           | Description |
 | --------------------------------------------- | -------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **System**                                    |          |                   |
 | `enabled`                                     |          | `0`               | DialPad running status (enabled/disabled)
-| `disable_due_inactivity_time`                 |          | `0` [s]            | DialPad is automatically disabled when no event received for this interval<br><br>decimal numbers allowed (e.g. `60.0` [s] is one minute, `0` set up by default disables this functionality)
+| `disable_due_inactivity_time`                 |          | `120` [s]            | Automatically disable after this idle interval; decimal seconds are allowed and `0` disables the timeout
 | `touchpad_disables_dialpad`                    |          | `1`            | when Touchpad is disabled DialPad is disabled aswell
 | **User Interface**                                |          |
-| `socket_enabled`                                     |          | `0`               | DialPad is sending to the socket what is the user doing (enabled/disabled)
+| `socket_enabled`                                     |          | `1`               | Send floating-overlay feedback; independent of the manager/status endpoint and shortcut execution
 | `socket_send_progress_above_treshold`                                     |          | `120`               | Is send progress when command `value` is not defined and angle is above this
 | **Layout**                                |          |
-| `slices_minimum_count`              |          | `5`             | minimum count of slices in the circle for multi-functional mode
+| `layout`              |          | empty             | Explicit preset identifier; nonempty overrides the positional/Nix default, empty uses that default
+| `slices_minimum_count`              |          | `4`             | Minimum number of slices in multifunction mode
 | `default_treshold`              |          | `90` [angle]             | this angle is considered as one step when moving with finger around
-| `suppress_app_specifics_shortcuts`              |          | `0`             | app specific shortcuts are ignored when is specific window with app opened
+| `config_supress_app_specifics_shortcuts`              |          | `0`             | Use `none` rather than application-specific mappings; historical configuration spelling is retained
 | **Top right icon**                            |          |                   |
 | `activation_time`              |          | `1.0` [seconds]             | amount of time you have to hold `top_right_icon`
 | `top_right_icon_coactivator_key`                     |          | ``            | empty default means no co-activator keys are required (valid values are `Shift`, `Control` or `Alt` delimeted by space)<br><br>this works only for activation by touching the top right icon

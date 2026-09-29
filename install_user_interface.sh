@@ -1,54 +1,35 @@
 #!/usr/bin/env bash
 
-source non_sudo_check.sh
-
-# ENV VARS
-if [ -z "$INSTALL_DIR_PATH" ]; then
-    INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
-fi
-if [ -z "$CONFIG_FILE_DIR_PATH" ]; then
-    CONFIG_FILE_DIR_PATH="$INSTALL_DIR_PATH"
-fi
-if [ -z "$CONFIG_FILE_NAME" ]; then
-    CONFIG_FILE_NAME="dialpad_dev"
-fi
-if [ -z "$CONFIG_FILE_PATH" ]; then
-    CONFIG_FILE_PATH="$CONFIG_FILE_DIR_PATH/$CONFIG_FILE_NAME"
-fi
+source "$(dirname -- "${BASH_SOURCE[0]}")/non_sudo_check.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/install_common.sh"
+dialpad_init_paths || exit 1
 
 echo
-echo "DialPad User Interface Installation"
-echo
-echo "You can choose whether to install the DialPad User Interface."
-echo "This interface allows you to see what you do on DialPad visually."
+echo "DialPad Floating User Interface Installation"
+echo "The feedback overlay is independent of the layout manager."
 echo
 
 USER_INTERFACE=0
+CURRENT_USER_INTERFACE=$(dialpad_config_cli config-get socket_enabled) || exit 1
+if [[ "$CURRENT_USER_INTERFACE" == 1 ]]; then
+    read -r -p "Keep the floating interface installed and enabled? [Y/n] " RESPONSE
+    case "$RESPONSE" in
+        [nN]|[nN][oO]) ;;
+        *) USER_INTERFACE=1 ;;
+    esac
+else
+    read -r -p "Do you want to install and enable the floating interface? [y/N] " RESPONSE
+    case "$RESPONSE" in
+        [yY][eE][sS]|[yY]) USER_INTERFACE=1 ;;
+    esac
+fi
 
-read -r -p "Do you want to install the DialPad User Interface? [y/N]" RESPONSE
-case "$RESPONSE" in [yY][eE][sS]|[yY])
-
-    source $INSTALL_DIR_PATH/.env/bin/activate
-    pip3 install -r requirements.ui.txt
-
-    USER_INTERFACE=1
-
-    sudo install dialpad_ui.py "$INSTALL_DIR_PATH"
-    sudo chown -R $USER "$INSTALL_DIR_PATH"
-
-    echo
-
-    echo "Enabling DialPad User Interface in configuration..."
-
-    if [ ! -f "$CONFIG_FILE_PATH" ]; then
-        echo "[main]" | tee "$CONFIG_FILE_PATH" > /dev/null
-    fi
-
-    # check if the setting already exists
-    if grep -q "socket_enabled" "$CONFIG_FILE_PATH"; then
-        sed -i "s/socket_enabled.*/socket_enabled = 1/" "$CONFIG_FILE_PATH"
-    else
-        # add new setting under [main] section
-        sed -i "/\[main\]/a socket_enabled = 1" "$CONFIG_FILE_PATH"
-    fi
-esac
+if [[ "$USER_INTERFACE" == 1 ]]; then
+    dialpad_install_qt_dependencies || exit 1
+    install -m 644 -- "$DIALPAD_SOURCE_DIR/dialpad_ui.py" \
+        "$DIALPAD_SOURCE_DIR/dialpad_overlay.py" "$INSTALL_DIR_PATH/" || exit 1
+    dialpad_config_cli config-set socket_enabled 1 || exit 1
+elif [[ -n "$CURRENT_USER_INTERFACE" ]]; then
+    # This is an explicit overlay choice, never a side effect of manager installation.
+    dialpad_config_cli config-set socket_enabled 0 || exit 1
+fi

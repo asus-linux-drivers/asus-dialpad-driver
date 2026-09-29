@@ -1,20 +1,8 @@
 #!/usr/bin/env bash
 
-source non_sudo_check.sh
-
-# ENV VARS
-if [ -z "$INSTALL_DIR_PATH" ]; then
-    INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
-fi
-if [ -z "$CONFIG_FILE_DIR_PATH" ]; then
-    CONFIG_FILE_DIR_PATH="$INSTALL_DIR_PATH"
-fi
-if [ -z "$CONFIG_FILE_NAME" ]; then
-    CONFIG_FILE_NAME="dialpad_dev"
-fi
-if [ -z "$CONFIG_FILE_PATH" ]; then
-    CONFIG_FILE_PATH="$CONFIG_FILE_DIR_PATH/$CONFIG_FILE_NAME"
-fi
+source "$(dirname -- "${BASH_SOURCE[0]}")/non_sudo_check.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/install_common.sh"
+dialpad_init_paths || exit 1
 
 echo
 echo "Co-activator key for DialPad activation"
@@ -28,9 +16,13 @@ echo
 
 if [ -z "$COACTIVATOR_KEY" ]; then
     PS3="Please enter your choice: "
-    OPTIONS=("None" "Shift" "Control" "Alt" "Quit")
+    OPTIONS=("Keep current" "None" "Shift" "Control" "Alt" "Quit")
     select SELECTED_OPT in "${OPTIONS[@]}"; do
         case "$SELECTED_OPT" in
+            "Keep current")
+                COACTIVATOR_KEY="Keep current"
+                break
+                ;;
             "Quit")
                 exit 0
                 ;;
@@ -48,19 +40,12 @@ fi
 echo
 echo "Selected co-activator key: $COACTIVATOR_KEY"
 
-if [ "$COACTIVATOR_KEY" != "None" ]; then
-
-    echo "Applying co-activator key ($COACTIVATOR_KEY) to config file..."
-
-    if [ ! -f "$CONFIG_FILE_PATH" ]; then
-        echo "[main]" | tee "$CONFIG_FILE_PATH" > /dev/null
-    fi
-
-    # check if the setting already exists
-    if grep -q "top_right_icon_coactivator_key" "$CONFIG_FILE_PATH"; then
-        sed -i "s/top_right_icon_coactivator_key.*/top_right_icon_coactivator_key = $COACTIVATOR_KEY/" "$CONFIG_FILE_PATH"
-    else
-        # add new setting under [main] section
-        sed -i "/\[main\]/a top_right_icon_coactivator_key = $COACTIVATOR_KEY" "$CONFIG_FILE_PATH"
-    fi
+if [[ "$COACTIVATOR_KEY" != "Keep current" ]]; then
+    case "$COACTIVATOR_KEY" in
+        None) COACTIVATOR_KEY="" ;;
+        Shift|Control|Alt) ;;
+        *) echo "Unsupported co-activator key: $COACTIVATOR_KEY" >&2; exit 1 ;;
+    esac
+    echo "Applying the explicit co-activator choice to configuration..."
+    dialpad_config_cli config-set top_right_icon_coactivator_key "$COACTIVATOR_KEY" || exit 1
 fi

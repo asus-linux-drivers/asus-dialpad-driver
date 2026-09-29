@@ -2,7 +2,6 @@
 
 import logging
 import os
-import importlib
 import sys
 import threading
 from time import sleep, time
@@ -20,26 +19,38 @@ except:
     pass
 
 from xkbcommon import xkb
-from libevdev import EV_ABS, EV_KEY, EV_REL, EV_SYN, Device, InputEvent, device
-from pyinotify import WatchManager, IN_CLOSE_WRITE, IN_IGNORED, IN_MOVED_TO
-# https://github.com/asus-linux-drivers/asus-dialpad-driver/issues/44
-try:
-    from pyinotify import ThreadedNotifier as Notifier
-except:
-    from pyinotify import AsyncNotifier as Notifier
+from libevdev import EV_ABS, EV_KEY, EV_SYN, Device, InputEvent, device
+from pyinotify import (
+    WatchManager, Notifier, ProcessEvent, IN_CLOSE_WRITE, IN_MOVED_TO,
+    IN_MOVED_FROM, IN_CREATE, IN_DELETE, IN_DELETE_SELF, IN_MOVE_SELF, IN_IGNORED,
+    IN_Q_OVERFLOW,
+)
 from periphery import I2C
 from typing import Optional
 import re
 import math
 import subprocess
 import configparser
-import ast
 import signal
 import mmap
 import shutil
 import glob
 import socket
 import json
+import selectors
+from pathlib import Path
+
+from dialpad_layout import resolve_layout, revision_bytes
+from dialpad_layout_linux import (
+    load_layout, compile_layout, validate_device_geometry, read_config,
+    update_config, requested_layout, save_recovery, load_recovery, StatusServer,
+    close_virtual_device, select_keyboard_device, uses_gnome_input_sources,
+    read_gnome_input_source,
+)
+from dialpad_runtime import (
+    CONTACT_KEYS, CandidateError, Geometry, PreparedLayout, RuntimeOwner,
+    action_capabilities, matching_action, source_status,
+)
 SOCKET_PATH = "/tmp/dialpad.sock"
 sock = None
 
@@ -104,19 +115,11 @@ display = None
 xkb_conn = None
 display_var = None
 display_wayland = None
-keyboard_state = None
 display_wayland_var = None
 keymap_loaded = False
-listening_touchpad_events_started = False
-active_modifiers = set()
-modifiers = set()
-coactivator_modifiers = set()
-activation_lock = threading.Lock()
 multi_app_mode = None
 multi_app_mode_titles = None
 multi_app_mode_icons = None
-app_specific_shortcuts = {}
-app_name = None
 coactivator_keys = None
 
 if xdg_session_type == "x11":
@@ -157,41 +160,31 @@ else:
 
 dialpad: bool = False
 
-# DialPad layout model
-model = None
-if len(sys.argv) > 1:
-    model = sys.argv[1]
+# Keep the positional interface. An argv fallback is never persisted as layout.
+model = sys.argv[1] if len(sys.argv) > 1 else None
+config_file_dir = os.path.abspath(sys.argv[2] if len(sys.argv) > 2 else ".")
+install_dir = Path(__file__).resolve().parent
+trusted_python = "--trusted-python" in sys.argv[3:]
+runtime = None
+status_server = None
+startup_requested = {"identifier": model, "revision": None, "path": None}
+startup_recovery_error = None
 try:
-    model_layout = importlib.import_module('layouts.' + model)
-except:
-    layouts_dir = "layouts"
-    available_layouts = [os.path.splitext(f)[0] for f in os.listdir(layouts_dir) if f.endswith(".py")]
-
-    log.error(
-        f"DialPad layout *.py from dir '{layouts_dir}' is required as first argument. "
-        f"Re-run install script or add missing first argument. "
-        f"Available layouts: {', '.join(available_layouts)}"
-    )
-    sys.exit(1)
-
-# Config file dir
-config_file_dir = ""
-if len(sys.argv) > 2:
-    config_file_dir = sys.argv[2]
-# When is given config dir empty or is used default -> to ./ because inotify needs check folder (nor nothing = "")
-if config_file_dir == "":
-     config_file_dir = "./"
-
-# Layout
-circle_diameter = getattr(model_layout, "circle_diameter", 0)
-center_button_diameter = getattr(model_layout, "center_button_diameter", 0)
-circle_center_x = getattr(model_layout, "circle_center_x", 0)
-circle_center_y = getattr(model_layout, "circle_center_y", 0)
-top_right_icon_width = getattr(model_layout, "top_right_icon_width", 0)
-top_right_icon_height = getattr(model_layout, "top_right_icon_height", 0)
-
-# App-specific configuration (add more mappings as needed)
-app_shortcuts = getattr(model_layout, "app_shortcuts", {})
+    selection = requested_layout(config_file_dir, model)
+    startup_requested["identifier"] = selection
+    startup_loaded = load_layout(selection, config_file_dir, install_dir,
+                                 trusted_python=trusted_python)
+    startup_requested = source_status(startup_loaded)
+except Exception as error:
+    startup_requested = getattr(error, "requested", None) or startup_requested
+    startup_recovery_error = str(error)
+    try:
+        startup_loaded = load_recovery(config_file_dir)
+        log.error("Requested layout rejected; recovering %s at %s: %s",
+                  startup_loaded.source.identifier, startup_loaded.revision, error)
+    except Exception as recovery_error:
+        log.error("Cannot load requested layout (%s) or recovery (%s)", error, recovery_error)
+        sys.exit(1)
 
 # Figure out devices from devices file
 touchpad: Optional[str] = None
@@ -212,7 +205,12 @@ while try_times > 0:
     keyboard_detected = 0
 
     with open('/proc/bus/input/devices', 'r') as f:
-        lines = f.readlines()
+        devices_text = f.read()
+        lines = devices_text.splitlines()
+        keyboard = select_keyboard_device(devices_text)
+        if keyboard is not None:
+            keyboard_detected = 2
+            log.info("Using physical keyboard /dev/input/event%s", keyboard)
         for line in lines:
             # Look for the touchpad #
 
@@ -245,25 +243,6 @@ while try_times > 0:
                     touchpad_detected = 2
                     log.info('Set touchpad id %s from %s', touchpad, line.strip())
 
-            # Look for the keyboard
-            if keyboard_detected == 0 and ("Name=\"AT Translated Set 2 keyboard" in line or (("Name=\"ASUE" in line or "Name=\"Asus" in line or "Name=\"ASUP" in line or "Name=\"ASUF" in line) and "Keyboard" in line)):
-                keyboard_detected = 1
-                log.info(
-                    'Detecting keyboard from string: \"%s\"', line.strip())
-
-            # We look for keyboard
-            if keyboard_detected == 1 and "H: " in line:
-                keyboard = line.split("event")[1]
-                keyboard = keyboard.split(" ")[0]
-                keyboard_detected = 2
-                log.info('Set keyboard id %s from %s', keyboard, line.strip())
-
-              # Do not stop looking if touchpad and keyboard have been found
-            # because more drivers can be installed
-            # https://github.com/mohamed-badaoui/asus-touchpad-numpad-driver/issues/87
-            # https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/95
-            #if touchpad_detected == 2 and keyboard_detected == 2:
-            #    break
 
     if touchpad_detected != 2 or keyboard_detected != 2:
         try_times -= 1
@@ -333,12 +312,25 @@ CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT = ""  # Empty means no co-activato
 CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD = "socket_send_progress_above_treshold"
 CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD_DEFAULT = 120
 
-config_file_path = config_file_dir + CONFIG_FILE_NAME
-config = configparser.ConfigParser()
+config_file_path = os.path.join(config_file_dir, CONFIG_FILE_NAME)
+config = configparser.ConfigParser(interpolation=None)
 config_lock = threading.Lock()
+CONFIG_DEFAULTS = {
+    CONFIG_ENABLED: CONFIG_ENABLED_DEFAULT,
+    CONFIG_SOCKET_ENABLED: CONFIG_SOCKET_ENABLED_DEFAULT,
+    CONFIG_SLICES_MINIMUM_COUNT: CONFIG_SLICES_MINIMUM_COUNT_DEFAULT,
+    CONFIG_DEFAULT_TRESHOLD: CONFIG_DEFAULT_TRESHOLD_DEFAULT,
+    CONFIG_DISABLE_DUE_INACTIVITY_TIME: CONFIG_DISABLE_DUE_INACTIVITY_TIME_DEFAULT,
+    CONFIG_TOUCHPAD_DISABLES_DIALPAD: CONFIG_TOUCHPAD_DISABLES_DIALPAD_DEFAULT,
+    CONFIG_ACTIVATION_TIME: CONFIG_ACTIVATION_TIME_DEFAULT,
+    CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS: CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT,
+    CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY: CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT,
+    CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD: CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD_DEFAULT,
+}
 
-# Start monitoring the touchpad
-fd_t = open('/dev/input/event' + str(touchpad), 'rb')
+# libevdev.events() is nonblocking only if the actual input fd is nonblocking.
+fd_t = open('/dev/input/event' + str(touchpad), 'rb', buffering=0)
+os.set_blocking(fd_t.fileno(), False)
 d_t = Device(fd_t)
 
 # Get touchpad dimensions
@@ -347,6 +339,7 @@ abs_y = d_t.absinfo[EV_ABS.ABS_Y]
 min_x, max_x = abs_x.minimum, abs_x.maximum
 min_y, max_y = abs_y.minimum, abs_y.maximum
 log.info('Touchpad min-max: x %d-%d, y %d-%d', min_x, max_x, min_y, max_y)
+device_bounds = {"min_x": min_x, "max_x": max_x, "min_y": min_y, "max_y": max_y}
 
 last_event_time = 0
 
@@ -367,164 +360,99 @@ def send_to_socket(payload: dict):
     except Exception:
         pass
 
-def parse_value_from_config(value):
-    if value == '0':
-        return False
-    elif value == '1':
-        return True
-    else:
-        return value
-
-def parse_value_to_config(value):
-    if value == True:
-        return '1'
-    elif value == False:
-        return '0'
-    else:
-        return str(value)
-
-def config_save():
-    global config_file_dir, config_file_path
-
-    try:
-        with open(config_file_path, 'w') as configFile:
-            config.write(configFile)
-            log.debug('Writting to config file: \"%s\"', configFile)
-    except:
-        log.error('Error during writting to config file: \"%s\"', config_file_path)
-        pass
-
-def config_set(key, value, no_save=False, already_has_lock=False):
-    global config, config_file_dir, config_lock
-
-    if not already_has_lock:
-        #log.debug("config_set: config_lock.acquire will be called")
-        config_lock.acquire()
-        #log.debug("config_set: config_lock.acquire called succesfully")
-
-    config.set(CONFIG_SECTION, key, parse_value_to_config(value))
-    log.info('Setting up for config file key: \"%s\" with value: \"%s\"', key, value)
-
-    if not no_save:
-        config_save()
-
-    if not already_has_lock:
-        # because inotify (deadlock)
-        sleep(0.1)
-        config_lock.release()
-
+def config_set(key, value):
+    global config
+    # Only this key is dirty. The adapter re-reads under its stable sidecar lock.
+    # Never wait for a runtime request while holding this or the adapter's lock.
+    with config_lock:
+        config = update_config(config_file_dir, {key: value})
+    if runtime is not None:
+        # Invalidate an already prepared stale enabled/settings snapshot now;
+        # the later inotify notification may safely coalesce with this request.
+        runtime.request()
     return value
 
-# methods for read & write from config file
-def config_get(key, key_default):
+
+def parse_settings(parser):
+    def raw(key):
+        default = CONFIG_DEFAULTS[key]
+        fallback = str(int(default)) if isinstance(default, bool) else str(default)
+        return parser.get(CONFIG_SECTION, key, fallback=fallback)
+
+    def boolean(key):
+        value = raw(key).lower()
+        if value in ("1", "yes", "true", "on"):
+            return True
+        if value in ("0", "no", "false", "off"):
+            return False
+        raise ValueError(f"Invalid boolean [main].{key}: {value}")
+
+    def number(key, integer=False):
+        value = int(raw(key)) if integer else float(raw(key))
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"Invalid nonnegative [main].{key}: {value}")
+        return value
+
+    settings = {
+        "enabled": boolean(CONFIG_ENABLED),
+        "socket": boolean(CONFIG_SOCKET_ENABLED),
+        "slices": number(CONFIG_SLICES_MINIMUM_COUNT, True),
+        "threshold": number(CONFIG_DEFAULT_TRESHOLD),
+        "disable_time": number(CONFIG_DISABLE_DUE_INACTIVITY_TIME),
+        "touchpad_disables": boolean(CONFIG_TOUCHPAD_DISABLES_DIALPAD),
+        "activation_time": number(CONFIG_ACTIVATION_TIME),
+        "suppress": boolean(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS),
+        "coactivator_names": tuple(raw(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY).split()),
+        "progress_threshold": number(CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD),
+    }
+    if settings["slices"] < 1 or settings["threshold"] <= 0:
+        raise ValueError("slices_minimum_count and default_treshold must be positive")
+    return settings
+
+
+def prepare_loaded_layout(loaded, settings):
+    validate_device_geometry(loaded.layout, device_bounds)
+    compiled = compile_layout(loaded.layout)
+    capabilities, modifier_keys = action_capabilities(compiled)
+    return PreparedLayout(loaded, compiled, Geometry.from_layout(loaded.layout.geometry, device_bounds),
+                          settings, capabilities, modifier_keys)
+
+
+def prepare_requested_layout():
+    requested = {"identifier": None, "revision": None, "path": None}
     try:
-        value = config.get(CONFIG_SECTION, key)
-        parsed_value = parse_value_from_config(value)
-        return parsed_value
-    except:
-        config.set(CONFIG_SECTION, key, parse_value_to_config(key_default))
-        return key_default
+        parser = read_config(config_file_dir)
+        selection = parser.get("main", "layout", fallback="").strip() or model
+        requested["identifier"] = selection
+        source = resolve_layout(selection, config_file_dir, install_dir)
+        requested["path"] = str(source.path)
+        loaded = load_layout(selection, config_file_dir, install_dir, trusted_python=trusted_python)
+        requested = source_status(loaded)
+        return prepare_loaded_layout(loaded, parse_settings(parser))
+    except Exception as error:
+        raise CandidateError(str(error), getattr(error, "requested", None) or requested) from error
 
-def read_config_file():
-    global config, config_file_path
 
-    try:
-        if not config.has_section(CONFIG_SECTION):
-            config.add_section(CONFIG_SECTION)
 
-        config.read(config_file_path)
-    except:
-        pass
 
-def is_multifunction(app_config):
-
-    standard_keys = {"center", "clockwise", "counterclockwise"}
-
-    non_standard_keys = []
-    non_standard_keys_icons = []
-
-    for key, value in app_config.items():
-        if key in standard_keys:
-            continue
-
-        non_standard_keys.append(key)
-
-        if isinstance(value, dict):
-            icon = value.get("icon")
-            if icon:
-                non_standard_keys_icons.append(icon)
-            icons = None
-            try:
-                icons = value.get("icons")
-            except:
-                pass
-            if icons:
-                value_command = value.get("value")
-                if value_command:
-                    value_command_output = get_current_value(value)
-                    icon = icons[value_command_output]
-                    non_standard_keys_icons.append(icon)
-
-    return bool(len(non_standard_keys)), non_standard_keys, non_standard_keys_icons
-
-def load_evdev_keys_for_coactivator_modifiers(coactivator_keys):
-    global coactivator_modifiers
-
-    if not coactivator_keys:
-        return
-
-    coactivator_modifiers.clear()
-    for coactivator_key_name in coactivator_keys:
-
-        coactivator_keysym_name = mod_name_to_specific_keysym_name(coactivator_key_name)
-        coactivator_evdev_key = get_keysym_name_associated_to_evdev_key_reflecting_current_layout()[coactivator_keysym_name]
-        coactivator_modifiers.add(coactivator_evdev_key)
-
-    log.debug("Loaded co-activator modifiers succesfully")
-
-def load_all_config_values():
-    global config
-    global disable_due_inactivity_time
-    global touchpad_disables_dialpad
-    global activation_time
-    global config_lock
-    global slices_minimum_count
-    global default_treshold
-    global suppress_app_specifics_shortcuts
-    global coactivator_keys
-    global socket_enabled
-    global multi_app_mode_titles
-    global multi_app_mode_icons
-    global socket_send_progress_above_treshold
-
-    #log.debug("load_all_config_values: config_lock.acquire will be called")
-    config_lock.acquire()
-    #log.debug("load_all_config_values: config_lock.acquire called succesfully")
-
-    read_config_file()
-
-    disable_due_inactivity_time = float(config_get(CONFIG_DISABLE_DUE_INACTIVITY_TIME, CONFIG_DISABLE_DUE_INACTIVITY_TIME_DEFAULT))
-    touchpad_disables_dialpad = config_get(CONFIG_TOUCHPAD_DISABLES_DIALPAD, CONFIG_TOUCHPAD_DISABLES_DIALPAD_DEFAULT)
-    activation_time = float(config_get(CONFIG_ACTIVATION_TIME, CONFIG_ACTIVATION_TIME_DEFAULT))
-    enabled = config_get(CONFIG_ENABLED, CONFIG_ENABLED_DEFAULT)
-    slices_minimum_count = int(config_get(CONFIG_SLICES_MINIMUM_COUNT, CONFIG_SLICES_MINIMUM_COUNT_DEFAULT))
-    default_treshold = int(config_get(CONFIG_DEFAULT_TRESHOLD, CONFIG_DEFAULT_TRESHOLD_DEFAULT))
-    suppress_app_specifics_shortcuts = int(config_get(CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS, CONFIG_SUPPRESS_APP_SPECIFICS_SHORTCUTS_DEFAULT))
-
-    coactivator_keys = config_get(CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY, CONFIG_TOP_RIGHT_ICON_COACTIVATOR_KEY_DEFAULT).strip().split()
-
-    load_evdev_keys_for_coactivator_modifiers(coactivator_keys)
-
-    socket_enabled = config_get(CONFIG_SOCKET_ENABLED, CONFIG_SOCKET_ENABLED_DEFAULT)
-    socket_send_progress_above_treshold = int(config_get(CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD, CONFIG_SOCKET_SEND_PROGRESS_ABOVE_TRESHOLD_DEFAULT))
-
-    multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles, slices_minimum_count)
-    multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons, slices_minimum_count)
-
-    config_lock.release()
-
-    if enabled is not dialpad:
-        toggle_top_right_icon(dialpad)
+def load_all_config_values(settings):
+    global disable_due_inactivity_time, touchpad_disables_dialpad, activation_time
+    global slices_minimum_count, default_treshold, suppress_app_specifics_shortcuts
+    global coactivator_keys, socket_enabled, socket_send_progress_above_treshold
+    disable_due_inactivity_time = settings["disable_time"]
+    touchpad_disables_dialpad = settings["touchpad_disables"]
+    activation_time = settings["activation_time"]
+    slices_minimum_count = settings["slices"]
+    default_treshold = settings["threshold"]
+    suppress_app_specifics_shortcuts = settings["suppress"]
+    coactivator_keys = settings["coactivator_names"]
+    socket_enabled = settings["socket"]
+    socket_send_progress_above_treshold = settings["progress_threshold"]
+    if settings["enabled"] != dialpad:
+        if settings["enabled"]:
+            activate_dialpad(persist=False)
+        else:
+            deactivate_dialpad(persist=False)
 
 def send_value_to_touchpad_via_i2c(value):
     global device_id, device_addr
@@ -572,67 +500,44 @@ def send_value_to_touchpad_via_i2c(value):
 
     return False
 
-def initialize_virtual_device():
-    global udev, dev, modifiers
+x11_last_set_layout = None
 
-    try:
-        # create the virtual device
-        dev = Device()
-        dev.name = touchpad_name.split(" ")[0] + " " + touchpad_name.split(" ")[1] + " DialPad"
 
-        # aggregate all shortcuts to enable
-        shortcuts_to_enable = {}
+def prepare_virtual_device(prepared, context, previous):
+    global x11_last_set_layout
+    layout_name = context.get("layout_name")
+    if (display and context.get("set_x11_layout") and layout_name and
+            x11_last_set_layout != layout_name):
+        subprocess.run(["setxkbmap", layout_name, "-display", display_var], check=True)
+        x11_last_set_layout = layout_name
+    # Layout bindings are explicit evdev codes, not guesses from keyboard symbols.
+    # Keymap changes only affect named co-activators, resolved before publication.
+    coactivators = resolve_coactivators(prepared.settings["coactivator_names"], context)
+    capabilities = prepared.capabilities
+    if previous is None and not capabilities:
+        return None, capabilities, coactivators
+    if previous is not None and capabilities <= previous.capabilities:
+        return previous.device, previous.capabilities, coactivators
+    candidate = Device()
+    candidate.name = " ".join(touchpad_name.split()[:2]) + " DialPad"
+    for code in capabilities:
+        candidate.enable(code)
+    output = candidate.create_uinput_device()
+    # Preserve the existing compositor discovery delay, with the old device alive.
+    sleep(0.5)
+    return output, capabilities, coactivators
 
-        shortcuts_to_enable = app_shortcuts
 
-        def process_config(config):
-            if not isinstance(config, dict):
-                return
-
-            field = config.get("key")
-            if field is None:
-                return
-
-            # single key
-            if isEvent(field):
-                enable_key(field)
-            # list of keys (EV_KEY or EV_REL)
-            elif isEventList(field):
-                for k in field:
-                    enable_key(k)
-            # otherwise treat as character
-            else:
-                set_evdev_key_for_char(field, '')
-
-            # add modifier if present
-            mod = config.get("modifier")
-            if mod is not None:
-                modifiers.add(mod)
-
-        # enable all keys from the aggregated configuration
-        for shortcuts in shortcuts_to_enable.values():
-            for action, configs in shortcuts.items():
-                if isinstance(configs, dict):
-                    for sublist in configs.values():
-                        if not isinstance(sublist, list):
-                            sublist = [sublist]
-                        for config in sublist:
-                            process_config(config)
-                else:
-                    if not isinstance(configs, list):
-                        configs = [configs]
-                    for config in configs:
-                        process_config(config)
-
-        # create the uinput device
-        udev = dev.create_uinput_device()
-        log.info("Virtual device initialized successfully.")
-
-        sleep(0.5)
-
-    except Exception as e:
-        log.error(f"Error initializing virtual device: {e}")
-        sys.exit(1)
+def publish_runtime_snapshot(snapshot):
+    global multi_app_mode, multi_app_mode_titles, multi_app_mode_icons
+    multi_app_mode = any(name is not None for name in snapshot.function_names)
+    multi_app_mode_titles = list(snapshot.function_titles)
+    multi_app_mode_icons = list(snapshot.function_icons)
+    load_all_config_values(snapshot.prepared.settings)
+    if socket_enabled:
+        send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons,
+                        "title": None, "value": None})
+        request_ring_metadata(snapshot)
 
 def get_active_window_gnome_wayland_title():
     global gnome_failure_count, gnome_max_failure_count
@@ -861,125 +766,34 @@ def get_active_window_title():
 
     return None, None
 
-def get_appropriate_app_name_and_shortcuts(window_binary, window_title):
 
-    app_name = None
+def emulate_shortcuts(shortcuts, touch_input, pressed, held_modifiers, duration_held=0):
+    shortcut = matching_action(shortcuts, touch_input, pressed, held_modifiers, duration_held)
+    if shortcut is None:
+        return None
+    if shortcut.get("key") is not None:
+        send_key_event(shortcut["key"], shortcut.get("event_values"))
+    if shortcut.get("command"):
+        execute_command(shortcut["command"])
+    return shortcut
 
-    # 1. window_binary (exact match)
-    if window_binary:
-        binary_lower = window_binary.lower()
-        app_name = next(
-            (app for app in app_shortcuts if app in binary_lower),
-            None
-        )
-    # 2. window_title (may be only part of)
-    if not app_name:
-        app_name = next((app for app in app_shortcuts if app in window_title.lower()), None) if window_title else None
-
-    # 3. not a specific app -> 'none' shortcuts block
-    if not app_name:
-        app_name = "none"
-
-    shortcuts = app_shortcuts.get(app_name, app_shortcuts["none"])
-
-    return app_name, shortcuts
-
-def emulate_shortcuts(app_shortcuts, touch_input, event_code, active_modifiers, duration_held=0):
-    global suppress_app_specifics_shortcuts
-
-    matched_shortcuts = app_shortcuts.get(touch_input, [])
-    if not isinstance(matched_shortcuts, list):
-        matched_shortcuts = [matched_shortcuts]
-
-    prioritized_shortcuts = sorted(matched_shortcuts, key=lambda s: "modifier" not in s)
-
-    for shortcut in prioritized_shortcuts:
-        key_code = None
-        try:
-            key_code = shortcut["key"]
-        except:
-            pass
-        key_value = None
-        try:
-            key_value = shortcut["value"]
-        except:
-            pass
-        command = None
-        try:
-            command = shortcut["command"]
-        except:
-            pass
-        trigger_mode = shortcut.get("trigger", "release")
-        modifier = shortcut.get("modifier")
-        required_duration = shortcut.get("duration", 0)  # Default to 0 (immediate)
-
-        # Ensure correct modifiers
-        if (modifier and modifier in active_modifiers) or (not modifier and not active_modifiers):
-            if duration_held is None or duration_held >= required_duration:
-                if (trigger_mode == "immediate" and event_code) or\
-                    (trigger_mode == "release" and not event_code) or\
-                    (touch_input == "center"):
-
-                    if key_code:
-                        send_key_event(key_code, key_value)
-                    if command:
-                        execute_command(command)    
-
-                    log.info(f"Executed shortcut: {key_code} with value {key_value} with modifier {modifier} (Held for {duration_held:.2f}s)")
-                    return shortcut # Stop after first valid shortcut
-            else:
-                #log.info(trigger_mode)
-                #log.info(event_code)
-                if (trigger_mode == "immediate" and event_code) or (trigger_mode == "release" and not event_code):
-                    log.info(f"Shortcut {key_code} with value {key_value} requires {required_duration}s, but was held for {duration_held:.2f}s")
-
-    return None
-
-def send_key_event(key_code, key_value):
-    global udev
-
-    if not udev:
-        log.error("Virtual device is not initialized. Cannot send key events.")
-        return
-
+def send_key_event(key_code, event_values=None):
+    codes = key_code if isinstance(key_code, (list, tuple)) else (key_code,)
     try:
-        if isinstance(key_code, list):
-            if key_code and key_value:
-                for c, v in zip(key_code, key_value):
-                    if c.type == EV_REL:
-                        udev.send_events([
-                            InputEvent(c, v),
-                            InputEvent(EV_SYN.SYN_REPORT, 0)
-                        ])
-            elif key_code:
-                for c in key_code:
-                    if c.type == EV_KEY:
-                        udev.send_events([
-                            InputEvent(c, 1),
-                            InputEvent(EV_SYN.SYN_REPORT, 0)
-                        ])
-                for c in key_code:
-                    if c.type == EV_KEY:
-                        udev.send_events([
-                            InputEvent(c, 0),
-                            InputEvent(EV_SYN.SYN_REPORT, 0)
-                        ])
+        if event_values is not None:
+            events = [InputEvent(code, value) for code, value in zip(codes, event_values)]
+            events.append(InputEvent(EV_SYN.SYN_REPORT, 0))
+            runtime.output.send(events)
         else:
-            udev.send_events([
-                InputEvent(key_code, 1),
-                InputEvent(EV_SYN.SYN_REPORT, 0)
-            ])
-            udev.send_events([
-                InputEvent(key_code, 0),
-                InputEvent(EV_SYN.SYN_REPORT, 0)
-         ])
+            presses = [InputEvent(code, 1) for code in codes]
+            presses.append(InputEvent(EV_SYN.SYN_REPORT, 0))
+            releases = [InputEvent(code, 0) for code in reversed(codes)]
+            releases.append(InputEvent(EV_SYN.SYN_REPORT, 0))
+            runtime.output.send(presses, releases)
+    except Exception:
+        log.exception("Error sending key event")
 
-        log.info(f"Sent key {key_code, key_value}")
-
-    except Exception as e:
-        log.error(f"Error sending key event: {e}")
-
-def activate_dialpad():
+def activate_dialpad(persist=True):
     global dialpad, multi_app_mode_titles, multi_app_mode_icons
 
     # unlock
@@ -987,7 +801,8 @@ def activate_dialpad():
     # activate
     send_value_to_touchpad_via_i2c("0x01")
 
-    config_set(CONFIG_ENABLED, True)
+    if persist:
+        config_set(CONFIG_ENABLED, True)
 
     #set_touchpad_prop_tap_to_click(false)
 
@@ -999,7 +814,7 @@ def activate_dialpad():
         if multi_app_mode:
             send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
 
-def deactivate_dialpad():
+def deactivate_dialpad(persist=True):
     global dialpad
 
     # lock
@@ -1007,7 +822,8 @@ def deactivate_dialpad():
     # deactivate
     send_value_to_touchpad_via_i2c("0x00")
 
-    config_set(CONFIG_ENABLED, False)
+    if persist:
+        config_set(CONFIG_ENABLED, False)
 
     dialpad = False
 
@@ -1024,45 +840,8 @@ def toggle_top_right_icon(current_state_is_enabled):
 
     log.info(f"Toggling top-right icon: {'Disabling' if current_state_is_enabled else 'Enabling'}")
 
-def handle_rotation(direction):
-    """
-    Handle rotation events based on the detected direction.
-    :param direction: "clockwise" or "counterclockwise"
-    """
-    log.info(f"Handling rotation: {direction}")
-    if direction == "clockwise":
-        # Example: Increase volume
-        log.info("Volume up triggered")
-        send_key_event(EV_KEY.KEY_VOLUMEUP)  # Replace with your specific action
-    elif direction == "counterclockwise":
-        # Example: Decrease volume
-        log.info("Volume down triggered")
-        send_key_event(EV_KEY.KEY_VOLUMEDOWN)  # Replace with your specific action
 
-def is_pressed_touchpad_top_right_icon():
-    global top_right_icon_width, top_right_icon_height, abs_mt_slot_x_values, abs_mt_slot_y_values, abs_mt_slot_value, maxx
 
-    if abs_mt_slot_x_values[abs_mt_slot_value] >= maxx - top_right_icon_width and\
-        abs_mt_slot_y_values[abs_mt_slot_value] >= 0 and abs_mt_slot_y_values[abs_mt_slot_value] <= top_right_icon_height:
-            return True
-
-    return False
-
-def check_dialpad_automatical_disable_or_idle_due_inactivity():
-    global disable_due_inactivity_time, last_event_time, dialpad, stop_threads
-
-    while not stop_threads:
-
-        if\
-            disable_due_inactivity_time and\
-            dialpad and\
-            last_event_time != 0 and\
-            time() > disable_due_inactivity_time + last_event_time:
-
-            deactivate_dialpad()
-            log.info("DialPad deactivated")
-
-        sleep(1)
 
 def qdbusSet(cmd):
     global qdbus_failure_count, qdbus_max_failure_count
@@ -1167,61 +946,13 @@ def set_touchpad_prop_send_events(value):
 
 
 def are_modifier_keys_pressed(modifier_names):
-
-    global display, keyboard_state, xkb_conn, active_modifiers
-
     if not modifier_names:
         return True
+    return bool(runtime.current.coactivators) and runtime.current.coactivators <= pressed_keys
 
-    # wayland
-    if keyboard_state:
-
-        try:
-            for modifier_name in modifier_names:
-                modifier_keysym_name = mod_name_to_specific_keysym_name(modifier_name)
-                modifier_evdev_key = load_evdev_key_for_wayland(modifier_keysym_name, keyboard_state)
-                if modifier_evdev_key not in active_modifiers:
-                    log.debug("Modifier %s not pressed (evdev)", modifier_name)
-                    return False
-        except:
-            pass
-
-    # x11
-    if xkb_conn and X11_LIBS_AVAILABLE:
-
-        X11_MODIFIER_INDEX = {
-            "Shift": 0,
-            "Control": 2,
-            "Alt": 3
-        }
-
-        try:
-            reply = xkb_conn(xcffib.xkb.key).GetState(
-                xcffib.xkb.ID.UseCoreKbd
-            ).reply()
-
-            active_mods = reply.mods
-
-            for modifier_name in modifier_names:
-                idx = X11_MODIFIER_INDEX.get(modifier_name)
-                if idx is not None and not (active_mods & (1 << idx)):
-                    log.debug("Modifier %s not pressed (xcffib)", modifier_name)
-                    return False
-
-        except Exception as e:
-            log.exception(f"Failed to get X11 modifier state via XKB: {e}")
-
-    log.debug("All modifier keys pressed: %s", modifier_names)
-
-    return True
-
-# Store key press start times
-key_press_times = {}
-
-import subprocess
 
 def get_current_value(shortcut_entry):
-    value = shortcut_entry.get("value")
+    value = shortcut_entry.get("value_query")
     if value:
         try:
             result = subprocess.check_output(value, shell=True).decode().strip()
@@ -1231,9 +962,6 @@ def get_current_value(shortcut_entry):
             return None
     return None
 
-def get_current_value_unit(shortcut_entry):
-    value = shortcut_entry.get("unit")
-    return value
 
 def execute_command(command):
     try:
@@ -1241,376 +969,366 @@ def execute_command(command):
     except subprocess.CalledProcessError as e:
         log.error(f"Failed to execute command: {e}")
 
-def reset_center():
-    global center_activated, title, treshold
 
-    center_activated = False
-    title = None
-    treshold = None
+pressed_keys = frozenset()
 
-window_binary = None
+
+def request_ring_metadata(snapshot):
+    # Commands execute on the metadata worker, never in commit/output locks.
+    # Epoch plus query serial fences results from an old layout or selection.
+    names = snapshot.function_names
+    profile, titles = snapshot.profile, snapshot.function_titles
+    previous_icons = tuple(multi_app_mode_icons)
+    def query():
+        icons = list(previous_icons)
+        for index, name in enumerate(names):
+            if name is not None:
+                entry = profile[name]
+                if entry.get("icons") and entry.get("value_query"):
+                    icons[index] = entry["icons"].get(get_current_value(entry), icons[index])
+        return {"titles": list(titles), "icons": icons, "title": None}
+    runtime.request_metadata(query)
+
+
+def request_action_metadata(entry, fallback, payload):
+    if not socket_enabled:
+        return
+    def query():
+        value = get_current_value(entry)
+        if value is None:
+            value = get_current_value(fallback)
+        return {**payload, "value": value, "unit": entry.get("unit", fallback.get("unit"))}
+    runtime.request_metadata(query)
+
+def gesture_modifiers(snapshot):
+    return pressed_keys & snapshot.prepared.modifiers
+
+
+def center_action(gesture, pressed, now):
+    snapshot = gesture.snapshot
+    profile = snapshot.profile
+    selected = profile.get(gesture.selected_function, {}) if gesture.selected_function else {}
+    mapping = selected if gesture.center_activated and "center" in selected else profile
+    shortcut = emulate_shortcuts(mapping, "center", pressed, gesture_modifiers(snapshot),
+                                 now - gesture.center_entered)
+    if shortcut is None:
+        return False
+    if gesture.selected_function:
+        if selected.get("command"):
+            execute_command(selected["command"])
+        else:
+            gesture.center_activated = not gesture.center_activated
+        gesture.display_title = selected.get("title", gesture.selected_function)
+        request_action_metadata(shortcut, selected, {"title": gesture.display_title})
+    else:
+        gesture.display_title = shortcut.get("title", gesture.display_title)
+        request_action_metadata(shortcut, {}, {"input": "center", "title": gesture.display_title})
+    return True
+
+
+def rotation_action(gesture, direction, pressed, now):
+    profile = gesture.snapshot.profile
+    selected = profile.get(gesture.selected_function, {}) if gesture.selected_function else {}
+    mapping = selected if gesture.center_activated else profile
+    shortcut = emulate_shortcuts(mapping, direction, pressed, gesture_modifiers(gesture.snapshot),
+                                 now - gesture.started)
+    if shortcut is not None:
+        gesture.display_title = shortcut.get("title", selected.get("title",
+                                    gesture.selected_function or gesture.display_title))
+        request_action_metadata(shortcut, selected,
+                                {"input": direction, "title": gesture.display_title})
+    return shortcut
+
+
+def finish_gesture(now, cancelled=False):
+    gesture = runtime.gesture
+    if not gesture.active:
+        return
+    gesture.release_pending = True
+    try:
+        if not cancelled and dialpad:
+            if gesture.pending_rotation:
+                rotation_action(gesture, gesture.pending_rotation, False, now)
+            if gesture.center_triggered:
+                center_action(gesture, False, now)
+        if gesture.tap_disabled:
+            set_touchpad_prop_send_events(1)
+            gesture.tap_disabled = False
+        if cancelled:
+            gesture.reset()
+        else:
+            snapshot = gesture.snapshot
+            gesture.finish()
+            if not gesture.center_activated and any(snapshot.function_names) and socket_enabled:
+                send_to_socket({"titles": list(snapshot.function_titles),
+                                "icons": list(multi_app_mode_icons), "title": None})
+                request_ring_metadata(snapshot)
+    finally:
+        gesture.release_pending = False
+
+
+def process_touch_frame(now):
+    contacts, gesture = runtime.contacts, runtime.gesture
+    if not contacts.synchronized or not contacts.frame_complete:
+        return
+    if not contacts.touching:
+        finish_gesture(now)
+        return
+    if not gesture.active:
+        gesture.begin(runtime.current, now)
+    gesture.touch_x, gesture.touch_y = contacts.position()
+    if gesture.touch_x is None or gesture.touch_y is None:
+        return
+    snapshot = gesture.snapshot
+    geometry = snapshot.geometry
+    x, y = gesture.touch_x, gesture.touch_y
+    left, right, top, bottom = geometry.icon_bounds
+    inside_icon = left <= x <= right and top <= y <= bottom
+    if inside_icon:
+        gesture.within_icon = True
+        if (gesture.started is not None and not gesture.icon_activated and
+                not gesture.coactivator_blocked and now - gesture.started >= activation_time):
+            if dialpad or are_modifier_keys_pressed(coactivator_keys):
+                toggle_top_right_icon(dialpad)
+                gesture.icon_activated = True
+            else:
+                gesture.coactivator_blocked = True
+    elif gesture.within_icon:
+        gesture.within_icon = False
+        gesture.icon_activated = False
+        gesture.coactivator_blocked = True
+
+    distance, angle = geometry.position(x, y)
+    if distance > geometry.radius or not dialpad:
+        gesture.center_triggered = False
+        gesture.last_angle = None
+        return
+    if not gesture.tap_disabled:
+        set_touchpad_prop_send_events(0)
+        gesture.tap_disabled = True
+    if distance < geometry.center_radius:
+        if not gesture.center_triggered:
+            gesture.center_triggered = True
+            gesture.center_entered = now
+            gesture.center_immediate = False
+            gesture.last_angle = None
+            if socket_enabled:
+                send_to_socket({"input": "center", "value": 1, "title": gesture.display_title})
+        if not gesture.center_immediate:
+            gesture.center_immediate = center_action(gesture, True, now)
+        return
+    if gesture.center_triggered:
+        gesture.center_triggered = False
+        gesture.center_immediate = False
+        if socket_enabled:
+            send_to_socket({"input": "center", "value": 0, "title": gesture.display_title})
+
+    if any(snapshot.function_names) and not gesture.center_activated:
+        current_slice = int(angle // (360 / len(snapshot.function_names)))
+        if current_slice != gesture.last_slice:
+            gesture.last_slice = current_slice
+            gesture.selected_function = snapshot.function_names[current_slice]
+            entry = snapshot.profile.get(gesture.selected_function, {})
+            gesture.display_title = entry.get("title", gesture.selected_function)
+            runtime.invalidate_metadata()
+            if socket_enabled:
+                send_to_socket({"titles": list(snapshot.function_titles),
+                                "icons": list(multi_app_mode_icons),
+                                "title": gesture.display_title})
+        return
+    if gesture.last_angle is None:
+        gesture.last_angle = gesture.angle_start = angle
+        gesture.angle_accumulator = 0
+        return
+    delta = (angle - gesture.last_angle + 180) % 360 - 180
+    gesture.last_angle = angle
+    gesture.angle_accumulator += delta
+    selected = snapshot.profile.get(gesture.selected_function, {}) if gesture.selected_function else {}
+    direction = "clockwise" if gesture.angle_accumulator > 0 else "counterclockwise"
+    mapping = selected if gesture.center_activated else snapshot.profile
+    held_modifiers = gesture_modifiers(snapshot)
+    held_for = now - gesture.started
+    action = (matching_action(mapping, direction, True, held_modifiers, held_for) or
+              matching_action(mapping, direction, False, held_modifiers, held_for))
+    threshold = (action or {}).get("treshold", selected.get("treshold", default_treshold))
+    if socket_enabled and threshold >= socket_send_progress_above_treshold and delta:
+        send_to_socket({"value_angle_start": gesture.angle_start,
+                        "value": int(max(-100, min(100, gesture.angle_accumulator / threshold * 100))),
+                        "title": gesture.display_title, "value_show_only_progress": True})
+    if abs(gesture.angle_accumulator) >= threshold:
+        shortcut = rotation_action(gesture, direction, True, now)
+        if shortcut is None:
+            gesture.pending_rotation = direction
+        gesture.angle_accumulator = 0
+        if socket_enabled and threshold >= socket_send_progress_above_treshold:
+            send_to_socket({"value": 0, "title": gesture.display_title,
+                            "value_show_only_progress": True})
+
+
+def synchronize_touchpad():
+    # libevdev updates its cached keys/slots while consuming INPUT-device sync.
+    # Never call sync() on the output device and never infer idle from one key.
+    runtime.contacts.synchronized = False
+    finish_gesture(time(), cancelled=True)
+    for event in d_t.sync():
+        runtime.contacts.feed(event.code.name, event.value)
+    keys = {}
+    for name in CONTACT_KEYS:
+        code = getattr(EV_KEY, name, None)
+        if code is not None and d_t.has(code):
+            keys[name] = bool(d_t.value[code])
+    slots, positions = None, {}
+    if d_t.num_slots is not None:
+        slots = {}
+        for index, slot in enumerate(d_t.slots):
+            tracking_id = slot[EV_ABS.ABS_MT_TRACKING_ID]
+            if tracking_id is None:
+                raise RuntimeError("Cannot prove multitouch contact state without tracking IDs")
+            slots[index] = tracking_id
+            positions[index] = [slot[EV_ABS.ABS_MT_POSITION_X], slot[EV_ABS.ABS_MT_POSITION_Y]]
+    runtime.contacts.resynchronize(
+        keys, slots, positions=positions, slot=d_t.current_slot,
+        x=d_t.value[EV_ABS.ABS_X], y=d_t.value[EV_ABS.ABS_Y],
+        type_a=slots is None and d_t.has(EV_ABS.ABS_MT_POSITION_X),
+    )
+
 
 def listen_touchpad_events():
-    global slices_minimum_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys, title, treshold, multi_app_mode_titles, app_specific_shortcuts, window_binary
-
-    try:
-
-            # Define circle and slices
-            circle_radius = circle_diameter / 2
-            center_button_radius = center_button_diameter / 2
-
-            # Define the bounds for the top-right icon
-            top_right_icon_bounds = {
-                "x_min": max_x - top_right_icon_width,
-                "x_max": max_x,
-                "y_min": 0,
-                "y_max": top_right_icon_height
-            }
-
-            log.info("Listening to touchpad events...")
-
-            touch_x, touch_y = None, None
-            finger_detected = False  # Track finger presence
-            touch_start_time = None  # Track the time when the touch started
-            within_top_right_icon = False  # Track if the touch is within the top-right icon bounds
-            icon_activated = False  # Track if the icon has already been activated during this touch
-            last_slice = None  # Track the last active slice in the circle
-            center_button_triggered = False
-            tap_disabled = False  # Track tap-to-click status
-            coactivator_blocked = False
-            center_enter_time = 0
-            title = None
-            center_activated = False
-            treshold = None
-            first_touch_outside = None
-            angle_accumulator = 0.0
-            last_trigger_angle = None
-            last_angle = None
-
-            for event in d_t.events():
-
-                last_event_time = time()
-
-                # Handle finger detection
-                if event.matches(EV_KEY.BTN_TOOL_FINGER):
-                    if event.value == 1:  # Finger down
-                        key_press_times[event.code] = time()
-                        finger_detected = True
-                        coactivator_blocked = False
-                        touch_start_time = time()  # Record the touch start time
-                        within_top_right_icon = False  # Reset the flag
-                        icon_activated = False  # Reset activation status
-                        last_slice = None  # Reset the last slice
-                        angle_start = None
-                        angle_accumulator = 0.0
-                        log.debug("Finger detected.")
-
-                    elif event.value == 0:  # Finger up
-                        finger_detected = False
-                        touch_start_time = None  # Reset the touch start time
-                        within_top_right_icon = False  # Reset the flag
-                        icon_activated = False  # Reset activation status
-                        last_slice = None  # Reset the last slice
-                        angle_start = None
-                        angle_accumulator = 0.0
-                        touch_x, touch_y = None, None
-                        log.debug("Finger lifted.")
-
-                        duration_held = time() - center_enter_time
-                        if center_button_triggered:
-
-                            if socket_enabled:
-                                if not multi_app_mode:
-                                    shortcut = emulate_shortcuts(app_specific_shortcuts, "center", event.value, active_modifiers, duration_held)
-                                    if shortcut:
-                                        center_button_triggered = False
- 
-                                        command = app_specific_shortcuts[title].get("command")
-                                        if command:
-                                            execute_command(command)
-                                elif title:
-                                    if app_specific_shortcuts['center']:
-                                        center_shortcut = emulate_shortcuts(app_specific_shortcuts, 'center', event.value, active_modifiers, duration_held)
-                                        if center_shortcut:
-                                            center_button_triggered = False
-
-                                            command = app_specific_shortcuts[title].get("command")
-                                            if command:
-                                                execute_command(command)
-                                            elif not center_activated:
-                                                center_activated = True
-                                                value = get_current_value(app_specific_shortcuts[title])
-                                                value_unit = get_current_value_unit(app_specific_shortcuts[title])
-                                                send_to_socket({"value": value, "unit": value_unit, "title": title})
-                                            else:
-                                                center_activated = False
-                                                send_to_socket({"input": "center", "value": 0, "title": title})
-                                                log.debug("Touch ended in center button area.")
-                                    else:
-                                        value = get_current_value(shortcut)
-                                        value_unit = get_current_value_unit(shortcut)
-                                        send_to_socket({"value": value, "unit": value_unit, "title": title})
-                                        center_button_triggered = False
-
-                                        if not center_activated:
-                                            center_activated = True
-                                        else:
-                                            reset_center()
-
-                        if multi_app_mode and not center_activated:
-                            if socket_enabled:
-                                send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
-
-                        # Re-enable tap-to-click
-                        if tap_disabled:
-                            set_touchpad_prop_send_events(1)
-                            tap_disabled = False
-
-                # Detect touch positions
-                if event.matches(EV_ABS.ABS_MT_POSITION_X):
-                    touch_x = event.value
-                elif event.matches(EV_ABS.ABS_MT_POSITION_Y):
-                    touch_y = event.value
-
-                # Check if the touch is in the top-right icon bounds
-                if touch_x is not None and touch_y is not None and finger_detected:
-                    if (top_right_icon_bounds["x_min"] <= touch_x <= top_right_icon_bounds["x_max"] and
-                            top_right_icon_bounds["y_min"] <= touch_y <= top_right_icon_bounds["y_max"]):
-                        if not within_top_right_icon:
-                            log.debug("Touch entered top-right icon bounds.")
-                        within_top_right_icon = True  # Mark that the touch is inside the bounds
-
-                        # Check if the touch duration exceeds the threshold and hasn't been activated yet
-                        if touch_start_time and not icon_activated and not coactivator_blocked:
-                            if (time() - touch_start_time) >= activation_time:
-
-                                if dialpad or (not dialpad and are_modifier_keys_pressed(coactivator_keys)):
-                                    toggle_top_right_icon(dialpad)
-                                    icon_activated = True
-                                else:
-                                    log.debug("DialPad activation blocked: co-activator key(s) not pressed: %s", " ".join(coactivator_keys))
-                                    coactivator_blocked = True
-                    else:
-                        if within_top_right_icon:
-                            log.debug("Touch left top-right icon bounds. Canceling the action.")
-                        within_top_right_icon = False  # Mark that the touch has left the bounds
-                        touch_start_time = None  # Cancel the action by resetting the start time
-                        icon_activated = False  # Reset the activation status to allow future activation
-
-                # Calculate distance and angle for circle-based detection
-                if touch_x is not None and touch_y is not None and finger_detected:
-                    dx = touch_x - circle_center_x
-                    dy = touch_y - circle_center_y
-                    distance = math.sqrt(dx**2 + dy**2)
-                    angle = (math.atan2(dy, dx) * 180 / math.pi + 90) % 360
-
-                    if angle_start is None:
-                        angle_start = angle
-
-                    if distance <= circle_radius and dialpad:
-
-                        first_touch_outside = True
-
-                        # Disable tap-to-click
-                        if not tap_disabled:
-                            set_touchpad_prop_send_events(0)
-                            tap_disabled = True
-
-                        if distance < center_button_radius and dialpad:
-                            
-                            if not center_button_triggered:
-
-                                log.debug("Touch detected in center button area. Title is: %s", title)
-
-                                if title:
-                                    send_to_socket({"input": "center", "value": 1, "title": title})
-                                    center_enter_time = time()
-                                    duration_held = time() - center_enter_time
-
-                                    center_button_triggered = True
-                                    icon_activated = True
-                        else:
-
-                            # Reset the center button triggered flag if the finger leaves the circle (but not the button area)
-                            if center_button_triggered:
-                                center_button_triggered = False
-                                icon_activated = False
-                                center_enter_time = 0
-                                send_to_socket({"input": "center", "value": 0, "title": title})
-                                log.debug("Touch ended in center button area.")
-
-                            if multi_app_mode and not center_activated:
-
-                                one_slice_angle = 360 / max(len(multi_app_mode_titles), slices_minimum_count)
-                                current_slice = int(angle // (one_slice_angle))
-
-                                if current_slice != last_slice or center_button_triggered:
-
-                                    if last_slice is None:
-                                        log.debug("Setting up the last_slice for first time.")
-                                        last_slice = current_slice
-                                    else:
-                                        pass
-
-                                    log.debug(
-                                        "TOUCH x=%d y=%d | center x=%d y=%d | dx=%d dy=%d | "
-                                        "angle=%.1f° | one slice angle=%.1f° | default_treshold=%.1f°",
-                                        touch_x, touch_y,
-                                        circle_center_x, circle_center_y,
-                                        touch_x - circle_center_x,
-                                        touch_y - circle_center_y,
-                                        angle,
-                                        one_slice_angle,
-                                        default_treshold
-                                    )
-
-                                    try:
-                                        title = multi_app_mode_titles[current_slice]
-                                    except:
-                                        title = None
-
-                                    if socket_enabled:
-                                        send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": title})
-                                            
-                                    last_slice = current_slice
-                            else:
-
-                                try:
-                                    treshold = app_specific_shortcuts[title]["treshold"]
-                                except:
-                                    treshold = default_treshold
-
-                                # Initialize angles if needed
-                                if last_angle is None:
-                                    last_angle = angle
-                                    last_trigger_angle = angle
-                                    angle_accumulator = 0
-                                    last_logged_accumulator = 0
-                                    continue
-
-                                # Compute delta for accumulator
-                                delta = angle - last_angle
-                                if delta > 180:
-                                    delta -= 360
-                                elif delta < -180:
-                                    delta += 360
-
-                                angle_accumulator += delta
-                                last_angle = angle
-
-                                # Log every ~5° of accumulator movement
-                                if 'last_logged_accumulator' not in locals():
-                                    last_logged_accumulator = angle_accumulator
-
-                                acc_delta = abs(angle_accumulator - last_logged_accumulator)
-                                if acc_delta >= 5.0:
-                                    log.debug(
-                                        "ROTATE | angle=%.1f° | last_angle=%s | delta=%.2f° | acc=%.2f° | "
-                                        "start=%.1f | trigger_ref=%.1f | treshold=%.1f° | dir=%s | slice=%s | center=%s",
-                                        angle,
-                                        f"{last_angle:.1f}" if last_angle is not None else "None",
-                                        delta,
-                                        angle_accumulator,
-                                        angle_start if angle_start is not None else -1,
-                                        last_trigger_angle if last_trigger_angle is not None else -1,
-                                        treshold,
-                                        "CW" if angle_accumulator > 0 else "CCW",
-                                        last_slice,
-                                        center_button_triggered
-                                    )
-                                    last_logged_accumulator = angle_accumulator
-
-
-                                    if treshold >= socket_send_progress_above_treshold:
-                                        if socket_enabled:
-                                            progress_percent = max(min(angle_accumulator / treshold * 100, 100), -100)
-                                            send_to_socket({
-                                                "value_angle_start": angle_start,
-                                                "value": int(progress_percent),
-                                                "title": title,
-                                                "value_show_only_progress": True
-                                            })
-
-                                # Trigger threshold if accumulator exceeds it
-                                if abs(angle_accumulator) >= treshold:
-                                    direction = "clockwise" if angle_accumulator > 0 else "counterclockwise"
-                                    log.debug("Threshold crossed (%s), angle_accumulator=%.2f°", direction, angle_accumulator)
-
-                                    general_value = None
-                                    general_unit = None
-
-                                    if center_activated and title in app_specific_shortcuts:
-                                        sht = app_specific_shortcuts[title]
-                                        general_value = get_current_value(sht)
-                                        general_unit = get_current_value_unit(sht)
-                                    else:
-                                        sht = app_specific_shortcuts
-
-                                    shortcut = emulate_shortcuts(sht, direction, event.value, active_modifiers)
-                                    if shortcut and socket_enabled:
-                                        value = get_current_value(shortcut)
-                                        unit = get_current_value_unit(shortcut)
-
-                                        if value is None:
-                                            value = general_value
-                                        if unit is None:
-                                            unit = general_unit
-
-                                        try:
-                                            title = shortcut.get("title", title)
-                                        except Exception:
-                                            pass
-
-                                        if treshold >= socket_send_progress_above_treshold:
-                                            send_to_socket({
-                                                "value": 0,
-                                                "title": title,
-                                                "value_show_only_progress": True
-                                            })
-                                        else:
-                                            send_to_socket({
-                                                "input": direction,
-                                                "value": value,
-                                                "unit": unit,
-                                                "title": title
-                                            })
-
-                                    # Reset accumulator after threshold, but do not move angle_start
-                                    angle_accumulator = 0
-                    else:
-                        if first_touch_outside:
-                            log.debug("Touch outside the circle for first time. Ignoring.")
-                            first_touch_outside = None
-
-    except device.EventsDroppedException:
-        for e in dev.sync(True):
-            pass
-
-        listen_touchpad_events()
-    except Exception:
-        log.exception("Error in listen_touchpad_events")
+    global last_event_time, pressed_keys, multi_app_mode_icons
+    synchronize_touchpad()
+    with selectors.DefaultSelector() as selector:
+        selector.register(fd_t, selectors.EVENT_READ)
+        selector.register(runtime.wakeup, selectors.EVENT_READ)
+        while not stop_threads:
+            selector.select(0.1)
+            runtime.wakeup.drain()
+            for kind, value in runtime.messages():
+                if kind == "pressed_keys":
+                    pressed_keys = value
+            # Drain actual nonblocking input before examining the commit boundary.
+            try:
+                for event in d_t.events():
+                    last_event_time = time()
+                    runtime.contacts.feed(event.code.name, event.value)
+                    if event.matches(EV_SYN.SYN_REPORT):
+                        process_touch_frame(last_event_time)
+            except device.EventsDroppedException:
+                synchronize_touchpad()
+            # Held icon/center timers still work when the finger stops moving.
+            process_touch_frame(time())
+            if (runtime.contacts.idle and disable_due_inactivity_time and dialpad and
+                    last_event_time and time() > last_event_time + disable_due_inactivity_time):
+                deactivate_dialpad()
+            runtime.commit()
+            payload = runtime.metadata_result()
+            if payload is not None and socket_enabled:
+                if "icons" in payload:
+                    multi_app_mode_icons = list(payload["icons"])
+                send_to_socket(payload)
 
 def check_config_values_changes():
-    global config_lock, stop_threads, event_notifier
+    # Watch entries, not replaced inodes. Lock-held notifications still request a
+    # re-read; generation coalescing never discards external configuration edits.
+    roots = {Path(config_file_dir), install_dir}
+    roots |= {root.resolve() for root in roots}
+    config_roots = {Path(config_file_dir), Path(config_file_dir).resolve()}
+    layout_dirs = {root / "layouts" for root in roots}
+    watched = {}
+    source_targets = set()
+    mask = (IN_CLOSE_WRITE | IN_MOVED_TO | IN_MOVED_FROM | IN_CREATE | IN_DELETE |
+            IN_DELETE_SELF | IN_MOVE_SELF | IN_IGNORED)
 
-    while not stop_threads:
+    class Handler(ProcessEvent):
+        def process_IN_Q_OVERFLOW(self, event):
+            runtime.request()
+
+        def process_default(self, event):
+            path = Path(event.pathname).absolute() if getattr(event, "pathname", None) else None
+            name = getattr(event, "name", "")
+            invalidated = event.mask & (IN_IGNORED | IN_DELETE_SELF | IN_MOVE_SELF)
+            if invalidated:
+                for watched_path, descriptor in tuple(watched.items()):
+                    if descriptor == event.wd:
+                        watched.pop(watched_path)
+                if not event.mask & IN_IGNORED:
+                    watch_manager.rm_watch(event.wd)
+            relevant = bool(invalidated)
+            if path:
+                relevant |= name == CONFIG_FILE_NAME and path.parent in config_roots
+                relevant |= path in roots or path in layout_dirs
+                relevant |= path in source_targets or path.resolve() in source_targets
+                search_dirs = layout_dirs | {item.resolve() for item in layout_dirs}
+                if path.parent in search_dirs:
+                    selected = runtime.status()["requested"]["identifier"] or model
+                    relevant |= name in (f"{selected}.json", f"{selected}.py")
+            if relevant:
+                runtime.request()
+
+    def refresh_watches():
+        nonlocal source_targets
+        status = runtime.status()
+        targets = {
+            Path(identity["path"]).resolve()
+            for identity in (status["requested"], status["applied"])
+            if identity and identity.get("path")
+        }
+        identifier = status["requested"]["identifier"] or model
         try:
-            event_notifier.process_events()
-            if event_notifier.check_events():
-                event_notifier.read_events()
+            targets.add(resolve_layout(identifier, config_file_dir, install_dir).path.resolve())
+        except Exception:
+            pass
+        changed = targets != source_targets
+        source_targets = targets
+        directories = roots | layout_dirs | {root.parent for root in roots}
+        directories |= {target.parent for target in targets}
+        desired = set()
+        for directory in directories:
+            directory = directory.resolve()
+            # Watch the closest existing ancestor until a missing search/target
+            # directory is created, then move coverage down to its actual parent.
+            while not directory.is_dir() and directory != directory.parent:
+                directory = directory.parent
+            desired.add(str(directory))
+        for path in tuple(watched):
+            if path not in desired:
+                watch_manager.rm_watch(watched.pop(path))
+                changed = True
+        for path in desired:
+            if path not in watched:
+                result = watch_manager.add_watch(path, mask)
+                if result.get(path, -1) >= 0:
+                    watched[path] = result[path]
+                    changed = True
+        return changed
 
-                if not config_lock.locked():
-                    log.info("check_config_values_changes: detected external change of config file -> loading changes")
-                    # because file might be read so fast that changes will not be there yet
-                    sleep(0.1)
-                    load_all_config_values()
-                else:
-                    log.info("check_config_values_changes: detected internal change of config file -> do nothing -> would be deadlock")
-
-        except KeyboardInterrupt:
-            break
-
-    log.info("check_config_values_changes: inotify watching config file ended")
+    notifier = Notifier(watch_manager, Handler())
+    try:
+        refresh_watches()
+        # Close the startup read/watch gap, without erasing an unchanged recovery
+        # report merely because its invalid requested source still exists.
+        observed = {"identifier": None, "path": None, "revision": None}
+        settings_changed = True
+        try:
+            parser = read_config(config_file_dir)
+            identifier = parser.get("main", "layout", fallback="").strip() or model
+            observed["identifier"] = identifier
+            settings_changed = parse_settings(parser) != runtime.current.prepared.settings
+            source = resolve_layout(identifier, config_file_dir, install_dir)
+            observed["path"] = str(source.path)
+            observed["revision"] = revision_bytes(source.path.read_bytes())
+        except Exception:
+            pass
+        if observed != runtime.status()["requested"] or settings_changed:
+            runtime.request()
+        while not stop_threads:
+            if notifier.check_events(timeout=500):
+                notifier.read_events()
+                notifier.process_events()
+            if refresh_watches():
+                # New coverage can hide earlier creations in that directory.
+                runtime.request()
+    finally:
+        notifier.stop()
 
 
 def gsettingsGet(path, name):
@@ -1627,605 +1345,169 @@ def gsettingsGet(path, name):
     else:
         log.debug('Gsettings failed more then: \"%s\" so is not try anymore', gsettings_max_failure_count)
 
-udev = None
-threads = []
-stop_threads = False
-enabled_evdev_keys = []
-
-# only to avoid first - x11 only
-gnome_current_layout = None
-# only to avoid first - x11 even wayland (e.g. Ubuntu 22.04)
-gnome_current_layout_index = None
-keysym_name_associated_to_evdev_key_reflecting_current_layout = None
 
 
-def mod_name_to_specific_keysym_name(mod_name):
-    global display_wayland
-
-    mod_to_specific_keysym_name = {
-        'Control': 'Control_L',
-        'Shift': 'Shift_L',
-        'Lock': 'Caps_Lock',
-        'Mod1': 'Alt_L',
-        'Mod2': 'Num_Lock',
-        'Mod3': 'Caps_Lock',
-        'Mod4': 'Meta_L',
-        'Mod5': 'Scroll_Lock',
-        'NumLock': 'Num_Lock',
-        'Alt': 'Alt_L',
-        'LevelThree': 'ISO_Level3_Shift',
-        'LAlt': 'Alt_L',
-        'RAlt': 'Alt_R',
-        'RControl': 'Control_R',
-        'LControl': 'Control_L',
-        'ScrollLock': 'Scroll_Lock',
-        'LevelFive': 'ISO_Level5_Shift',
-        'AltGr': 'Alt_R',
-        'Meta': 'Meta_L',
-        'Super': 'Meta_L',
-        'Hyper': 'Hyper_L'
+def resolve_coactivators(names, context):
+    if not names:
+        return frozenset()
+    aliases = {
+        "Control": "Control_L", "Shift": "Shift_L", "Lock": "Caps_Lock",
+        "Mod1": "Alt_L", "Mod2": "Num_Lock", "Mod3": "Caps_Lock",
+        "Mod4": "Super_L", "Mod5": "ISO_Level3_Shift", "NumLock": "Num_Lock",
+        "Alt": "Alt_L", "LevelThree": "ISO_Level3_Shift", "LAlt": "Alt_L",
+        "RAlt": "Alt_R", "RControl": "Control_R", "LControl": "Control_L",
+        "ScrollLock": "Scroll_Lock", "LevelFive": "ISO_Level5_Shift",
+        "AltGr": "ISO_Level3_Shift", "Meta": "Super_L", "Super": "Super_L",
+        "Hyper": "Hyper_L",
     }
-
+    indices = {"Shift": 0, "Lock": 1, "Control": 2, "Alt": 3, "Mod1": 3,
+               "Mod2": 4, "Mod3": 5, "Mod4": 6, "Mod5": 7, "AltGr": 7}
+    resolved = set()
     if display and X11_LIBS_AVAILABLE:
-
-        mods_to_indexes_x11 = {
-            "Shift": Xlib.X.ShiftMapIndex,
-            "Lock": Xlib.X.LockMapIndex,
-            "Control": Xlib.X.ControlMapIndex,
-            "Alt": Xlib.X.Mod1MapIndex,
-            "Mod1": Xlib.X.Mod1MapIndex,
-            "Mod2": Xlib.X.Mod2MapIndex,
-            "Mod3": Xlib.X.Mod3MapIndex,
-            "Mod4": Xlib.X.Mod4MapIndex,
-            "Mod5": Xlib.X.Mod5MapIndex,
-            "AltGr": Xlib.X.Mod5MapIndex,
-        }
-
-        if mod_name in mods_to_indexes_x11:
-
-            mods = display.get_modifier_mapping()
-            first_keycode = mods[mods_to_indexes_x11[mod_name]][0]
-            if first_keycode:
-                key = EV_KEY.codes[int(first_keycode) - 8]
-                keysym = display.keycode_to_keysym(first_keycode, 0)
-                for key in Xlib.XK.__dict__:
-                    if key.startswith("XK") and Xlib.XK.__dict__[key] == keysym:
-                        return key[3:]
-                return mod_to_specific_keysym_name[mod_name]
+        if context.get("x11_mapping") is not None:
+            display.refresh_keyboard_mapping(context["x11_mapping"])
+        mapping = display.get_modifier_mapping()
+        for name in names:
+            if name in indices:
+                keycode = next((code for code in mapping[indices[name]] if code), 0)
             else:
-                return mod_to_specific_keysym_name[mod_name]
-    elif display_wayland and keyboard_state:
-
-        keymap = keyboard_state.get_keymap()
-        num_mods = keymap.num_mods()
-
+                keycode = display.keysym_to_keycode(Xlib.XK.string_to_keysym(aliases.get(name, name)))
+            if not 8 <= keycode < len(EV_KEY.codes) + 8:
+                raise ValueError(f"Cannot resolve co-activator {name!r} in the X11 keymap")
+            resolved.add(EV_KEY.codes[keycode - 8])
+        return frozenset(resolved)
+    state = context.get("keyboard_state")
+    if state is None:
+        raise ValueError("Wayland keymap is unavailable for configured co-activators")
+    keymap = state.get_keymap()
+    mod_names = {keymap.mod_get_name(index): index for index in range(keymap.num_mods())}
+    for name in names:
+        desired_mod = {"Alt": "Mod1", "Meta": "Mod4", "Super": "Mod4",
+                       "AltGr": "Mod5"}.get(name, name)
+        target_symbol = xkb.keysym_from_name(aliases.get(name, name))
+        found = None
         for keycode in keymap:
-            keyboard_state_clean = keymap.state_new()
-            key_state = keyboard_state_clean.update_key(keycode, xkb.KeyDirection.XKB_KEY_DOWN)
+            if not 8 <= keycode < len(EV_KEY.codes) + 8:
+                continue
+            clean = keymap.state_new()
+            clean.update_key(keycode, xkb.KeyDirection.XKB_KEY_DOWN)
+            if desired_mod in mod_names and clean.mod_index_is_active(
+                    mod_names[desired_mod], xkb.StateComponent.XKB_STATE_MODS_EFFECTIVE):
+                found = EV_KEY.codes[keycode - 8]
+                break
+            count = keymap.num_layouts_for_key(keycode)
+            layout_index = context.get("layout_index")
+            layouts = (layout_index % count,) if count and layout_index is not None else range(count)
+            if any(target_symbol in keymap.key_get_syms_by_level(keycode, index, 0)
+                   for index in layouts):
+                found = EV_KEY.codes[keycode - 8]
+                break
+        if found is None:
+            raise ValueError(f"Cannot resolve co-activator {name!r} in the Wayland keymap")
+        resolved.add(found)
+    return frozenset(resolved)
 
-            key_layouts_count = keymap.num_layouts_for_key(keycode)
-            for layout in range(key_layouts_count):
-
-                current_layout_index = gnome_current_layout_index
-
-                if current_layout_index is not None:
-
-                    if key_layouts_count:
-                        layout_is_active = (current_layout_index % key_layouts_count == layout)
-                    else:
-                        layout_is_active = (current_layout_index == layout)
-                else:
-                    layout_is_active = keyboard_state.layout_index_is_active(
-                        layout,
-                        xkb.StateComponent.XKB_STATE_LAYOUT_EFFECTIVE
-                    )
-
-                if layout_is_active:
-                    for mod_index in range(num_mods):
-
-                        is_key_mod = key_state & xkb.StateComponent.XKB_STATE_MODS_DEPRESSED
-                        if is_key_mod:
-
-                            is_mod_active = keyboard_state_clean.mod_index_is_active(mod_index, xkb.StateComponent.XKB_STATE_MODS_DEPRESSED)
-                            if is_mod_active:
-                                if keymap.mod_get_name(mod_index) == mod_name:
-
-                                    keysyms = keymap.key_get_syms_by_level(keycode, layout, 0)
-
-                                    if len(keysyms) != 1:
-                                        continue
-
-                                    keysym_name = xkb.keysym_get_name(keysyms[0])
-                                    #log.info(mod_name)
-                                    #log.info(keycode)
-                                    #log.info(keysym_name)
-                                    return keysym_name
-
-        return mod_to_specific_keysym_name[mod_name]
-    else:
-        return mod_to_specific_keysym_name[mod_name]
 
 def listen_keyboard_events():
-    """
-    Listen for keyboard events to track active modifier keys.
-    """
-    global active_modifiers, modifiers, coactivator_modifiers, keyboard
-
     if keyboard is None:
-        log.warning("No keyboard detected; skipping keyboard listener.")
         return
-
-    log.info("Listening to keyboard events...")
-
     try:
-        fd_k = open('/dev/input/event' + str(keyboard), 'rb')
-        d_k = Device(fd_k)
+        with open('/dev/input/event' + str(keyboard), 'rb', buffering=0) as fd_k:
+            os.set_blocking(fd_k.fileno(), False)
+            d_k = Device(fd_k)
+            keys = {code for code in d_k.evbits.get(EV_KEY, ()) if d_k.value[code]}
+            runtime.submit("pressed_keys", frozenset(keys))
+            with selectors.DefaultSelector() as selector:
+                selector.register(fd_k, selectors.EVENT_READ)
+                while not stop_threads:
+                    if not selector.select(0.5):
+                        continue
+                    try:
+                        for event in d_k.events():
+                            if event.type == EV_KEY:
+                                if event.value:
+                                    keys.add(event.code)
+                                else:
+                                    keys.discard(event.code)
+                    except device.EventsDroppedException:
+                        for event in d_k.sync():
+                            pass
+                        keys = {code for code in d_k.evbits.get(EV_KEY, ()) if d_k.value[code]}
+                    runtime.submit("pressed_keys", frozenset(keys))
+    except Exception:
+        log.exception("Keyboard listener failed")
 
-        for event in d_k.events():
 
-            if event.type == EV_KEY and (event.code in modifiers or event.code in coactivator_modifiers):
-
-                if event.value == 1:  # Key Pressed
-                    active_modifiers.add(event.code)
-                elif event.value == 0:  # Key Released
-                    active_modifiers.discard(event.code)
-
-                log.debug(f"Active modifiers: {active_modifiers}")
-
-    except device.EventsDroppedException:
-        for e in dev.sync(True):
-            pass
-    except Exception as e:
-        log.error(f"Error in listen_touchpad_events: {e}")
-
-# default are for unicode shortcuts + is loaded layout during start (BackSpace, Return - enter, asterisk, minus etc. can be found using xev)
-def set_defaults_keysym_name_associated_to_evdev_key_reflecting_current_layout():
-    global keysym_name_associated_to_evdev_key_reflecting_current_layout
-
-    keysym_name_associated_to_evdev_key_reflecting_current_layout = {
-         # unicode shortcut - for hex value
-        '0': '',
-        '1': '',
-        '2': '',
-        '3': '',
-        '4': '',
-        '5': '',
-        '6': '',
-        '7': '',
-        '8': '',
-        '9': '',
-        'a': '',
-        'b': '',
-        'c': '',
-        'd': '',
-        'e': '',
-        'f': '',
-        # unicode shortcut - start sequence
-        mod_name_to_specific_keysym_name('Shift'): '',
-        mod_name_to_specific_keysym_name('Control'): '',
-        # possible co-activator key (together with Shift and Control above)
-        mod_name_to_specific_keysym_name('Alt'): '',
-        'u': '',
-        # unicode shortcut - end sequence
-        'space': ''
-    }
-
-def get_keysym_name_associated_to_evdev_key_reflecting_current_layout():
-    global keysym_name_associated_to_evdev_key_reflecting_current_layout
-
-    # lazy initialization because of loading modifiers inside Shift & Control
-    if not keysym_name_associated_to_evdev_key_reflecting_current_layout:
-        set_defaults_keysym_name_associated_to_evdev_key_reflecting_current_layout()
-
-    return keysym_name_associated_to_evdev_key_reflecting_current_layout
-
-def load_evdev_key_for_wayland(char, keyboard_state):
-    global gnome_current_layout_index
-
-    keysym = xkb.keysym_from_name(char)
-
-    keymap = keyboard_state.get_keymap()
-    num_mods = keymap.num_mods()
-
-    for keycode in keymap:
-
-        key_layouts_count = keymap.num_layouts_for_key(keycode)
-        for layout in range(key_layouts_count):
-
-            num_levels = keymap.num_levels_for_key(keycode, layout)
-
-            for level in range(num_levels):
-                mod_masks_for_level = keymap.key_get_mods_for_level(keycode, layout, level)
-
-                if len(mod_masks_for_level) < 1:
-                    continue
-
-                keysyms = keymap.key_get_syms_by_level(keycode, layout, level)
-
-                if len(keysyms) != 1 or keysyms[0] != keysym:
-                    continue
-
-                for mod_mask_index in range(len(mod_masks_for_level)):
-
-                    mod_evdev_keys = []
-                    for mod_index in range(num_mods):
-
-                        if (mod_masks_for_level[mod_mask_index] & (1 << mod_index) == 0):
-                            continue
-
-                        mod_name = keymap.mod_get_name(mod_index)
-
-                        mod_as_evdev_key = load_evdev_key_for_wayland(mod_name_to_specific_keysym_name(mod_name), keyboard_state)
-                        mod_evdev_keys.append(mod_as_evdev_key)
-
-                        if not mod_as_evdev_key:
-                            continue
-
-                    if len(mod_evdev_keys) > 0:
-                        key = mod_evdev_keys + [EV_KEY.codes[int(keycode - 8)]]
-                    else:
-                        key = EV_KEY.codes[int(keycode - 8)]
-
-                    current_layout_index = gnome_current_layout_index
-
-                    if current_layout_index is not None:
-
-                        if key_layouts_count:
-                            layout_is_active = (current_layout_index % key_layouts_count == layout)
-                        else:
-                            layout_is_active = (current_layout_index == layout)
-                    else:
-                        layout_is_active = keyboard_state.layout_index_is_active(
-                            layout,
-                            xkb.StateComponent.XKB_STATE_LAYOUT_EFFECTIVE
-                        )
-
-                    enable_key(key)
-
-                    if layout_is_active:
-                        set_evdev_key_for_char(char, key)
-                        return key
-
-def wl_load_keymap_state():
-    global keyboard_state, keymap_loaded, coactivator_keys, udev
-
-    log.debug("Wayland will try to load keymap")
-
-    enabled_keys = len(enabled_evdev_keys)
-
-    for char in get_keysym_name_associated_to_evdev_key_reflecting_current_layout().copy():
-        load_evdev_key_for_wayland(char, keyboard_state)
-
-    # one or more changed to something not enabled yet to send using udev device? -> udev device has to be re-created
-    #
-    # BUT only reset if event is not first one - driver is starting and keymap is not loaded yet
-    if len(enabled_evdev_keys) > enabled_keys and keymap_loaded and udev:
-        reset_udev_device()
-
-    keymap_loaded = True
-
-    log.debug("Wayland loaded keymap succesfully")
-    log.debug(get_keysym_name_associated_to_evdev_key_reflecting_current_layout())
-
-    load_evdev_keys_for_coactivator_modifiers(coactivator_keys)
-
-def extract_icons(app_specific_shortcuts):
-    icons = {}
-
-    if not isinstance(app_specific_shortcuts, dict):
-        return icons
-
-    for name, definition in app_specific_shortcuts.items():
-        if not isinstance(definition, dict):
-            continue
-
-        icon = definition.get("icon")
-        if icon:
-            icons[name] = icon
-
-    return icons
-
-def pad_to_minimum(arr, minimum):
-    if arr is None:
-        arr = []
-    return arr + [None] * max(0, minimum - len(arr))
-
-def window_was_changed(window_binary_local):
-    global stop_threads, window_binary, window_title, app_name, app_specific_shortcuts, multi_app_mode, multi_app_mode_titles, multi_app_mode_icons,\
-        center_activated, title
-
-    app_name_local, app_specific_shortcuts = get_appropriate_app_name_and_shortcuts(window_binary_local, window_title)
-    multi_app_mode_local, multi_app_mode_titles_local, multi_app_mode_icons_local = is_multifunction(app_specific_shortcuts)
-
-    update = False
-
-    if window_binary_local != window_binary:
-        window_binary = window_binary_local
-        update = True
-
-    if app_name_local != app_name:
-        app_name = app_name_local
-        update = True
-
-    if multi_app_mode_local != multi_app_mode:
-        multi_app_mode = multi_app_mode_local
-        update = True
-
-    if multi_app_mode_titles_local != pad_to_minimum(multi_app_mode_titles, slices_minimum_count):
-        multi_app_mode_titles = pad_to_minimum(multi_app_mode_titles_local, slices_minimum_count)
-        update = True
-
-    if multi_app_mode_icons_local != pad_to_minimum(multi_app_mode_icons, slices_minimum_count):
-        multi_app_mode_icons = pad_to_minimum(multi_app_mode_icons_local, slices_minimum_count)
-        update = True
-
-    if update:
-        log.debug({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
-        send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
-        center_activated = False
-        title = None
+def window_was_changed(binary, title=None):
+    runtime.submit_window(binary, title)
 
 
 def check_window():
-    global stop_threads, window_binary, window_title, app_name, app_specific_shortcuts, multi_app_mode, multi_app_mode_titles, multi_app_mode_icons,\
-        center_activated, title
-
     while not stop_threads:
-        window_binary_local, window_title = get_active_window_title()
-        window_was_changed(window_binary_local)
+        window_was_changed(*get_active_window_title())
         sleep(0.5)
 
 
 def check_gnome_layout():
-    global stop_threads, gnome_current_layout, gnome_current_layout_index, keyboard_state, display_wayland_var, display_var
-
+    previous = None
     while not stop_threads:
-
-        mru_sources = gsettingsGet('org.gnome.desktop.input-sources', 'mru-sources')
         try:
-          mru_sources_evaluated = ast.literal_eval(mru_sources.decode())
-        except:
-          mru_sources_evaluated = []
-
-        sources = gsettingsGet('org.gnome.desktop.input-sources', 'sources')
-        try:
-          sources_evaluated = ast.literal_eval(sources.decode())
-        except:
-          sources_evaluated = []
-
-        if len(mru_sources_evaluated) > 0 and mru_sources_evaluated[0] in sources_evaluated:
-
-            mru_layout_index = sources_evaluated.index(mru_sources_evaluated[0])
-            mru_layout = mru_sources_evaluated[0][1].split("+")[0]
-
-            if display_wayland_var:
-                if keyboard_state and gnome_current_layout_index is not mru_layout_index:
-
-                    gnome_current_layout_index =  mru_layout_index
-                    gnome_current_layout = mru_layout
-                    wl_load_keymap_state()
-
-            elif gnome_current_layout != mru_layout:
-
-                    try:
-                        cmd = ['setxkbmap', mru_layout, '-display', display_var]
-
-                        log.debug(cmd)
-                        subprocess.call(cmd)
-
-                        gnome_current_layout = mru_layout
-                        gnome_current_layout_index =  mru_layout_index
-                    except:
-                        log.exception('setxkbmap set failed')
-
-        else:
-
-            current = gsettingsGet('org.gnome.desktop.input-sources', 'current')
-
-            current_evaluated = None
-            try:
-              current_evaluated = ast.literal_eval(current.decode().split(" ")[1])
-            except:
-              pass
-
-            if current_evaluated is not None and current_evaluated < len(sources_evaluated):
-                layout = sources_evaluated[current_evaluated][1].split("+")[0]
-
-                # first run, would be unnecessary duplicated loading x11 keymap because X.org server notify all clients at start about Mapping and setxkbmap would trigger new second notify
-                if gnome_current_layout == None:
-                    gnome_current_layout = layout
-
-                elif gnome_current_layout != layout:
-
-                    try:
-                        cmd = ['setxkbmap', layout, '-display', display_var]
-
-                        log.debug(cmd)
-                        subprocess.call(cmd)
-
-                        gnome_current_layout = layout
-                    except:
-                        log.exception('setxkbmap set failed')
-
+            current = read_gnome_input_source(gsettingsGet)
+            if current is not None and current != previous:
+                index, name = current
+                runtime.submit_context(layout_index=index, layout_name=name,
+                                       set_x11_layout=bool(previous and display))
+                previous = current
+        except Exception:
+            log.debug("Cannot read GNOME keyboard layout", exc_info=True)
         sleep(0.5)
 
 
 def cleanup():
-    global dialpad, display, display_wayland, stop_threads, event_notifier, watch_manager, xkb_conn, sock
-
-    log.info("Clean up started")
-
-    # try deactivate first
-    try:
-        if dialpad:
-
-            dialpad = False
-            deactivate_dialpad()
-            log.info("DialPad deactivated")
-
-        # then clean up
-        stop_threads=True
-
-        fd_t.close()
-
-        if display_wayland:
-            display_wayland.disconnect()
-
-        if display:
-            try:
-                display.close()
-            # because may be already closed (e.g. closed connection by server in load_keymap_listener_x11)
-            except:
-                pass
-
+    global stop_threads
+    stop_threads = True
+    if runtime is not None:
         try:
-            if xkb_conn is not None:
-                xkb_conn.disconnect()
+            finish_gesture(time(), cancelled=True)
+        except Exception:
+            log.exception("Cannot restore touchpad event delivery")
+    if dialpad:
+        try:
+            deactivate_dialpad()
+        except Exception:
+            log.exception("Cannot deactivate DialPad")
+    if status_server is not None:
+        status_server.close()
+    if runtime is not None:
+        runtime.close()
+    fd_t.close()
+    if display_wayland:
+        display_wayland.disconnect()
+    if display:
+        try:
+            display.close()
         except Exception:
             pass
-
-        if watch_manager:
-            watch_manager.close()
-
-        if sock:
-            sock.close()
-
-        if os.path.exists(SOCKET_PATH):
-            os.unlink(SOCKET_PATH)
-
-        log.info("Clean up finished")
-    except:
-        log.exception("Clean up error")
-        pass
+    if xkb_conn is not None:
+        xkb_conn.disconnect()
+    if sock:
+        sock.close()
+    # The datagram endpoint belongs to the floating UI, not this sender.
 
 threads = []
 stop_threads = False
 watch_manager = None
-event_notifier = None
 
-def isEvent(event):
-    if hasattr(event, "name") and event in EV_KEY.codes or event in EV_REL.codes:
-        return True
-    else:
-        return False
-
-def isEventList(events):
-    if type(events) is list:
-        for event in events:
-            if not isEvent(event):
-                return False
-        return True
-    else:
-        return False
-
-def enable_key(key_or_key_combination, reset_udev = False):
-    global enabled_evdev_keys, dev, udev
-
-    enabled_keys_count = len(enabled_evdev_keys)
-
-    if isEvent(key_or_key_combination):
-      if key_or_key_combination not in enabled_evdev_keys:
-          enabled_evdev_keys.append(key_or_key_combination)
-          dev.enable(key_or_key_combination)
-    elif isEventList(key_or_key_combination):
-      for key in key_or_key_combination:
-        if key not in enabled_evdev_keys:
-          enabled_evdev_keys.append(key)
-          dev.enable(key)
-
-    # one or more changed to something not enabled yet to send using udev device? -> udev device has to be re-created
-    if len(enabled_evdev_keys) > enabled_keys_count and reset_udev:
-      reset_udev_device()
-
-def set_evdev_key_for_char(char, evdev_key):
-    global keysym_name_associated_to_evdev_key_reflecting_current_layout
-
-    # lazy initialization because of loading modifiers inside Shift & Control
-    if not keysym_name_associated_to_evdev_key_reflecting_current_layout:
-        set_defaults_keysym_name_associated_to_evdev_key_reflecting_current_layout()
-
-    keysym_name_associated_to_evdev_key_reflecting_current_layout[char] = evdev_key
-
-def load_evdev_key_for_x11(char):
-    global display, keysym_name_associated_to_evdev_key_reflecting_current_layout
-
-    keysym = Xlib.XK.string_to_keysym(char)
-
-    if keysym == 0:
-      return
-
-    keycode = display.keysym_to_keycode(keysym)
-    key = EV_KEY.codes[int(keycode) - 8]
-
-    # bare
-    if display.keycode_to_keysym(keycode, 0) == keysym:
-      pass
-    # shift
-    elif display.keycode_to_keysym(keycode, 1) == keysym:
-      key = [load_evdev_key_for_x11(mod_name_to_specific_keysym_name('Shift')), key]
-    # altgr
-    elif display.keycode_to_keysym(keycode, 2) == keysym:
-      key = [load_evdev_key_for_x11(mod_name_to_specific_keysym_name('AltGr')), key]
-    # shift altgr
-    elif display.keycode_to_keysym(keycode, 3) == keysym:
-      key = [load_evdev_key_for_x11(mod_name_to_specific_keysym_name('Shift')), load_evdev_key_for_x11(mod_name_to_specific_keysym_name('AltGr')), key]
-
-    set_evdev_key_for_char(char, key)
-
-    enable_key(key)
-
-    return key
-
-# necessary when are new keys enabled
-def reset_udev_device():
-    global dev, udev
-
-    log.info("Old device at {} ({})".format(udev.devnode, udev.syspath))
-    udev = dev.create_uinput_device()
-    log.info("New device at {} ({})".format(udev.devnode, udev.syspath))
-
-    # Sleep for a little bit so udev, libinput, Xorg, Wayland, ... all have had
-    # a chance to see the device and initialize it. Otherwise the event
-    # will be sent by the kernel but nothing is ready to listen to the
-    # device yet
-    sleep(0.5)
-
-def load_evdev_keys_for_x11():
-  global enabled_evdev_keys, keymap_loaded, coactivator_keys, udev
-
-  log.debug("X11 will try to load keymap")
-
-  enabled_keys_count = len(enabled_evdev_keys)
-
-  for char in get_keysym_name_associated_to_evdev_key_reflecting_current_layout().copy():
-    load_evdev_key_for_x11(char)
-
-  # one or more changed to something not enabled yet to send using udev device? -> udev device has to be re-created
-  #
-  # BUT only reset if event is not first one - driver is starting and keymap is not loaded yet
-  if len(enabled_evdev_keys) > enabled_keys_count and keymap_loaded and udev:
-    reset_udev_device()
-
-  keymap_loaded = True
-
-  log.debug("X11 loaded keymap succesfully")
-  log.debug(get_keysym_name_associated_to_evdev_key_reflecting_current_layout())
-
-  load_evdev_keys_for_coactivator_modifiers(coactivator_keys)
 
 def wl_keyboard_keymap_handler(keyboard, format_, fd, size):
-    global keyboard_state
-
-    keymap_data = mmap.mmap(
-       fd, size, prot=mmap.PROT_READ, flags=mmap.MAP_PRIVATE
-    )
-    xkb_context = xkb.Context()
-    keymap = xkb_context.keymap_new_from_buffer(keymap_data, length=size - 1)
-    keymap_data.close()
-
-    keyboard_state = keymap.state_new()
-
-    wl_load_keymap_state()
+    global keymap_loaded
+    try:
+        with mmap.mmap(fd, size, prot=mmap.PROT_READ, flags=mmap.MAP_PRIVATE) as data:
+            keymap = xkb.Context().keymap_new_from_buffer(data, length=size - 1)
+        runtime.submit_context(keyboard_state=keymap.state_new())
+        keymap_loaded = True
+    finally:
+        os.close(fd)
 
 def wl_registry_handler(registry, id_, interface, version):
   log.debug(registry)
@@ -2241,8 +1523,6 @@ def load_keymap_listener_wayland():
     global stop_threads, display_wayland_var, display_wayland
 
     try:
-        display_wayland = Display(display_wayland_var)
-        display_wayland.connect()
         registry = display_wayland.get_registry()
         registry.dispatcher["global"] = wl_registry_handler
         display_wayland.dispatch(block=True)
@@ -2255,24 +1535,16 @@ def load_keymap_listener_wayland():
         os.kill(os.getpid(), signal.SIGUSR1)
 
 def load_keymap_listener_x11():
-    global stop_threads, display, listening_touchpad_events_started
-
     try:
+        while not stop_threads:
+            event = display.next_event()
+            if event.type == Xlib.X.MappingNotify and event.request == Xlib.X.MappingKeyboard:
+                runtime.submit_context(x11_mapping=event)
+    except Exception:
+        if not stop_threads:
+            log.exception("X11 keymap listener failed")
+            os.kill(os.getpid(), signal.SIGUSR1)
 
-      while not stop_threads:
-
-        event = display.next_event()
-        if event.type == Xlib.X.MappingNotify and event.count > 0 and event.request == Xlib.X.MappingKeyboard:
-
-          if listening_touchpad_events_started or not keymap_loaded:
-            display.refresh_keyboard_mapping(event)
-            load_evdev_keys_for_x11()
-            #raise Xlib.error.ConnectionClosedError("fd") # testing purpose only
-    except:
-      log.exception("X11 load keymap listener error. Exiting")
-      os.kill(os.getpid(), signal.SIGUSR1)
-
-last_app = None
 
 def _extract_app_info(acc):
     try:
@@ -2284,28 +1556,13 @@ def _extract_app_info(acc):
         return None, None
 
 def on_window_activated(event):
-    global window_title, last_app
-
     try:
-        # only activation event
-        if event.detail1 != 1:
-            return
-
-        acc = event.source
-        app_name_local, window_title = _extract_app_info(acc)
-
-        if not app_name_local:
-            return
-
-        # deduplication
-        if app_name_local == last_app:
-            return
-
-        last_app = app_name_local
-
-        window_was_changed(app_name_local)
+        if event.detail1 == 1:
+            binary, title = _extract_app_info(event.source)
+            if binary or title:
+                window_was_changed(binary, title)
     except Exception:
-        pass
+        log.debug("Cannot identify activated window", exc_info=True)
         
 def check_window_pyatspi():
     pyatspi.Registry.registerEventListener(
@@ -2316,97 +1573,72 @@ def check_window_pyatspi():
     pyatspi.Registry.start()
 
 try:
-
-    # init the socket
     init_socket()
+    config = update_config(config_file_dir, {}, defaults_if_missing=CONFIG_DEFAULTS)
+    settings = parse_settings(config)
+    try:
+        initial = prepare_loaded_layout(startup_loaded, settings)
+    except Exception as error:
+        # Compilation and measured geometry may fail after static source loading.
+        startup_recovery_error = str(error)
+        initial = prepare_loaded_layout(load_recovery(config_file_dir), settings)
+    runtime = RuntimeOwner(prepare_requested_layout, prepare_virtual_device,
+                           lambda loaded: save_recovery(config_file_dir, loaded),
+                           publish_runtime_snapshot, device_bounds,
+                           dispose_device=close_virtual_device)
+    if os.environ.get("XDG_RUNTIME_DIR"):
+        # Unsafe endpoints and duplicate owners are fatal, not silent fallbacks.
+        status_server = StatusServer(config_file_dir, runtime.status)
+        status_server.start()
+    else:
+        log.warning("XDG_RUNTIME_DIR is unset; live layout status is unavailable")
 
-    # init the device
-    initialize_virtual_device()
-
-    if xdg_session_type == "wayland" and display_wayland and PYWAYLAND_AVAILABLE:
-        t = threading.Thread(target=load_keymap_listener_wayland)
-        t.daemon = True
-        threads.append(t)
-        t.start()
-
-    if xdg_session_type == "x11" and display and X11_LIBS_AVAILABLE:
-
-        # when is the driver starting event is not received
-        load_evdev_keys_for_x11()
-
-        t = threading.Thread(target=load_keymap_listener_x11)
-        t.daemon = True
-        threads.append(t)
-        t.start()
-
-    # wait until is keymap loaded
-    while not keymap_loaded:
-        sleep(0.5)
-
-    # Load config values
-    load_all_config_values()
-    config_lock.acquire()
-    config_save()
-    config_lock.release()
-    # because inotify (deadlock)
-    sleep(0.5)
-
+    if xdg_session_type == "wayland":
+        thread = threading.Thread(target=load_keymap_listener_wayland, daemon=True)
+        threads.append(thread)
+        thread.start()
+        while not keymap_loaded:
+            sleep(0.1)
+    else:
+        keymap_loaded = True
+        thread = threading.Thread(target=load_keymap_listener_x11, daemon=True)
+        threads.append(thread)
+        thread.start()
+    runtime.submit_window(*get_active_window_title())
+    try:
+        while not runtime.install_startup(initial, requested=startup_requested,
+                                          recovery_error=startup_recovery_error):
+            runtime.wakeup.drain()
+    except Exception as error:
+        if startup_recovery_error:
+            raise
+        startup_recovery_error = str(error)
+        initial = prepare_loaded_layout(load_recovery(config_file_dir), settings)
+        while not runtime.install_startup(initial, requested=startup_requested,
+                                          recovery_error=startup_recovery_error):
+            runtime.wakeup.drain()
     watch_manager = WatchManager()
-
-    path = os.path.abspath(config_file_dir)
-    mask = IN_CLOSE_WRITE | IN_IGNORED | IN_MOVED_TO
-    watch_manager.add_watch(path, mask)
-
-    event_notifier = Notifier(watch_manager)
-
-    t = threading.Thread(target=check_dialpad_automatical_disable_or_idle_due_inactivity)
-    t.daemon = True
-    threads.append(t)
-    t.start()
-
-    if keyboard:
-        t = threading.Thread(target=listen_keyboard_events)
-        t.daemon = True
-        threads.append(t)
-        t.start()
-
-    # check changes in config values
-    t = threading.Thread(target=check_config_values_changes)
-    t.daemon = True
-    threads.append(t)
-    t.start()
-
-    t = threading.Thread(target=check_gnome_layout)
-    t.daemon = True
-    threads.append(t)
-    t.start()
+    listeners = [listen_keyboard_events, check_config_values_changes]
+    if uses_gnome_input_sources(os.environ):
+        listeners.append(check_gnome_layout)
+    for target in listeners:
+        thread = threading.Thread(target=target, daemon=True)
+        threads.append(thread)
+        thread.start()
 
     desktop_by_pyatspi = None
-    try:
-        desktop_by_pyatspi = pyatspi.Registry.getDesktop(0)
-    except:
-        pass
-
-    if PYATSPI_AVAILABLE and desktop_by_pyatspi:
-        # for current window
-        window_binary_local, window_title = get_active_window_title()
-        window_was_changed(window_binary_local)
-
-        # then listen for window change event
-        t = threading.Thread(target=check_window_pyatspi)
-        t.daemon = True
-        threads.append(t)
-        t.start()
-    else:
-        t = threading.Thread(target=check_window)
-        t.daemon = True
-        threads.append(t)
-        t.start()
-
-    # Start the touchpad listener in a separate thread
+    if PYATSPI_AVAILABLE:
+        try:
+            desktop_by_pyatspi = pyatspi.Registry.getDesktop(0)
+        except Exception:
+            pass
+    target = check_window_pyatspi if desktop_by_pyatspi else check_window
+    thread = threading.Thread(target=target, daemon=True)
+    threads.append(thread)
+    thread.start()
     listen_touchpad_events()
 except Exception:
-    log.exception("Listening touchpad events unexpectedly failed")
+    log.exception("DialPad runtime failed")
 finally:
     cleanup()
     log.info("Exiting")

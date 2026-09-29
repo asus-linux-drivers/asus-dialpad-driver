@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Independent optional PySide6 Layout Manager for copying, editing, validating, saving, activating, renaming, deleting, and importing/exporting presets.
+- Ordered JSON layouts, a portable event catalog, strict validation, static Python-layout conversion, and an explicit trusted-Python compatibility path.
+- Application/function/action editors, searchable event selection, numeric and interactive geometry editing, a static function-ring preview, and a separate raw JSON draft.
+- `asus-dialpad-layout` CLI, per-configuration read-only runtime status, exact-revision activation acknowledgment, and durable last-successful layout recovery.
+- Optional standalone manager/desktop installation and Nix `layoutManagerSupport` / `layoutManager.enable` integration, without adding Qt to headless installations.
+
+### Changed
+
+- A nonempty `[main] layout` overrides the positional startup default without requiring service-unit edits. The fallback argument is not persisted.
+- Configuration writers patch the latest INI file under a stable sidecar lock. Reinstallation preserves explicit selections, custom layouts, and recovery data.
+- Layout, window, and keymap changes are prepared and published by one runtime owner at complete no-contact input boundaries, including idle wakeup and multitouch resynchronization.
+- Uninstallation preserves configuration/layout/recovery data by default; deleting that data requires explicit `PURGE` confirmation. Changed launchers and unrelated files are retained.
+- Share one optional Qt renderer between the live floating overlay and the manager's non-executing tool-ring preview; expose preview navigation beside the named-function metadata editor.
+
+### Fixed
+
+- Pin complete key press/release sequences to one output device; held gestures finish using their original snapshot before a new layout is applied.
+- Explicitly release retired, stale-candidate, and shutdown uinput devices instead of waiting for python-libevdev reference cycles to be collected; layout switching no longer leaves duplicate keyboards in the compositor.
+- Recognize typing-capable keyboards with unlisted names, including the H7606WP ITE device, while retaining known-keyboard priority and excluding uinput feedback.
+- Restrict GNOME input-source polling to matching desktop sessions; accept typed empty GVariant lists and avoid treating input-method engines as XKB layout names.
+- Use Arch Linux's `python-atspi` package name so dependency installation does not fail looking for `python-pyatspi`.
+- Keep function identities separate from display titles and numeric event values separate from shell display queries; command-only/control-only actions work without the floating overlay.
+- Reject stale prepared layouts and metadata results, report post-commit recovery-write failures without claiming rollback, and prevent concurrent activation/removal from leaving a deleted selection.
+- Preserve external edits and invalid JSON drafts in the manager; avoid accessing destroyed list items after saving a new draft during navigation.
+- Fall back to tool labels for missing or unreadable icons; wrap long labels with explicit overflow ellipses, and align icons and highlighted sectors clockwise from the top for non-quadrant slice counts.
+
 ## 2.5.2 (30.8.2026)
 
 ### Fixed

@@ -1,144 +1,49 @@
 #!/usr/bin/env bash
 
-source non_sudo_check.sh
+set -o pipefail
+source "$(dirname -- "${BASH_SOURCE[0]}")/non_sudo_check.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/install_common.sh"
+dialpad_init_paths || exit 1
+INSTALL_UDEV_DIR_PATH=${INSTALL_UDEV_DIR_PATH:-/usr/lib/udev}
 
-# ENV VARS
-if [ -z "$LOGS_DIR_PATH" ]; then
-    LOGS_DIR_PATH="/var/log/asus-dialpad-driver"
+# Uninstallation must not provision groups or packages, especially for editor-only installs.
+if [[ -z "$LOGS_DIR_PATH" ]]; then
+    if [[ -d /var/log/asus-dialpad-driver && -w /var/log/asus-dialpad-driver ]]; then
+        LOGS_DIR_PATH=/var/log/asus-dialpad-driver
+    else
+        LOGS_DIR_PATH="${XDG_STATE_HOME:-$HOME/.local/state}/asus-dialpad-driver"
+    fi
 fi
-
-source install_logs.sh
-
-echo
-
-# log output from every uninstalling attempt aswell
-LOGS_UNINSTALL_LOG_FILE_NAME=uninstall-"$(date +"%d-%m-%Y-%H-%M-%S")".log
-LOGS_UNINSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/$LOGS_UNINSTALL_LOG_FILE_NAME"
-touch "$LOGS_UNINSTALL_LOG_FILE_PATH"
-
-# for `rm` exclude !(xy)
-shopt -s extglob
+mkdir -p -- "$LOGS_DIR_PATH" || exit 1
+LOGS_UNINSTALL_LOG_FILE_PATH="$LOGS_DIR_PATH/uninstall-$(date +%d-%m-%Y-%H-%M-%S).log"
 
 {
-  # ENV VARS
-  if [ -z "$INSTALL_DIR_PATH" ]; then
-    INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
-  fi
-  if [ -z "$INSTALL_UDEV_DIR_PATH" ]; then
-    INSTALL_UDEV_DIR_PATH="/usr/lib/udev/"
-  fi
-  if [ -z "$CONFIG_FILE_DIR_PATH" ]; then
-	  CONFIG_FILE_DIR_PATH="$INSTALL_DIR_PATH"
-  fi
-  if [ -z "$CONFIG_FILE_NAME" ]; then
-	  CONFIG_FILE_NAME="dialpad_dev"
-  fi
+    DRIVER_WAS_INSTALLED=0
+    if [[ -f "$INSTALL_DIR_PATH/dialpad.py" ]]; then
+        DRIVER_WAS_INSTALLED=1
+        source "$DIALPAD_SOURCE_DIR/uninstall_service.sh"
+        source "$DIALPAD_SOURCE_DIR/uninstall_user_groups.sh"
+    fi
 
-  CONFIG_FILE_PATH="$CONFIG_FILE_DIR_PATH/$CONFIG_FILE_NAME"
-	LAYOUTS_DIR="$INSTALL_DIR_PATH/layouts/"
+    echo "Removing application files and launchers from: $INSTALL_DIR_PATH"
+    echo "Configuration directory: $CONFIG_FILE_DIR_PATH"
+    echo "Configuration, layouts (including modified bundled layouts) and recovery are preserved by default."
+    echo
+    echo "Purge permanently deletes dialpad_dev, layouts/ and .layout-state/ in the configuration directory"
+    echo "and any retained layouts/recovery in the installation directory. Other files are not removed."
+    read -r -p "Type PURGE to delete those user data, or press Enter to preserve them: " RESPONSE
+    PURGE_USER_DATA=0
+    [[ "$RESPONSE" == PURGE ]] && PURGE_USER_DATA=1
 
-	LAYOUTS_DIR_DIFF=""
-	if test -d "$LAYOUTS_DIR"
-	then
-	    LAYOUTS_DIR_DIFF=$(diff --exclude __pycache__ layouts $LAYOUTS_DIR)
-	fi
+    dialpad_remove_launchers || exit 1
+    dialpad_remove_program_files "$PURGE_USER_DATA" || exit 1
+    echo "Uninstallation finished successfully."
 
-	if [ "$LAYOUTS_DIR_DIFF" != "" ]
-	then
-	    read -r -p "Installed layouts contain modifications compared to the default ones. Do you want remove them [y/N]" response
-	    case "$response" in [yY][eE][sS]|[yY])
-			sudo rm -rf "$INSTALL_DIR_PATH/!($CONFIG_FILE_NAME)"
-			if [[ $? != 0 ]]
-			then
-				echo "Something went wrong when removing files from the $INSTALL_DIR_PATH"
-			fi
-        	;;
-    	*)
-			sudo rm -rf "$INSTALL_DIR_PATH/!(layouts|$CONFIG_FILE_NAME)"
-			if [[ $? != 0 ]]
-			then
-				echo "Something went wrong when removing files from the $INSTALL_DIR_PATH"
-			fi
-
-			echo
-			echo "Layouts in $INSTALL_DIR_PATH/layouts have not been removed and remain in system:"
-	        ls /$INSTALL_DIR_PATH/layouts
-        	;;
-    	esac
-	else
-		sudo rm -rf "$INSTALL_DIR_PATH/!($CONFIG_FILE_NAME)"
-		if [[ $? != 0 ]]
-		then
-			echo "Something went wrong when removing files from the $INSTALL_DIR_PATH"
-		fi
-	fi
-
-	if [[ -f "$CONF_FILE" ]]; then
-
-	    read -r -p "Do you want remove config file [y/N]" RESPONSE
-	    case "$RESPONSE" in [yY][eE][sS]|[yY])
-
-			if test -d "$LAYOUTS_DIR"
-			then
-				sudo rm -f "$CONFIG_FILE_PATH"
-			else
-				sudo rm -rf "$INSTALL_DIR_PATH"
-			fi
-
-			if [[ $? != 0 ]]
-			then
-				echo "Something went wrong when removing files from the $INSTALL_DIR_PATH"
-			fi
-        	;;
-    	*)
-			echo "Config file have not been removed and remain in system:"
-			echo "$CONFIG_FILE_PATH"
-        	;;
-    	esac
-	else
-
-		if test -d "$LAYOUTS_DIR"
-		then
-			sudo rm -f $CONFIG_FILE_PATH
-		else
-			sudo rm -rf $INSTALL_DIR_PATH
-		fi
-
-		if [[ $? != 0 ]]
-		then
-			echo "Something went wrong when removing files from the $INSTALL_DIR_PATH"
-		fi
-	fi
-
-	sudo rm -f /etc/modules-load.d/i2c-dev-asus-dialpad-driver.conf
-	if [[ $? != 0 ]]
-	then
-	    echo "Something went wrong when removing the uinput conf"
-	fi
-
-	echo "Asus DialPad Driver removed"
-
-	echo
-
-	source uninstall_user_groups.sh
-
-	echo
-
-	source uninstall_service.sh
-
-	echo
-
-	echo "Uninstallation finished succesfully"
-
-	echo
-
-	read -r -p "Reboot is required. Do you want reboot now? [y/N]" RESPONSE
-    case "$RESPONSE" in [yY][eE][sS]|[yY])
-        sudo /sbin/reboot
-        ;;
-    *)
-        ;;
-    esac
-
-	exit 0
-} 2>&1 | sudo tee "$LOGS_UNINSTALL_LOG_FILE_PATH"
+    if [[ "$DRIVER_WAS_INSTALLED" == 1 ]]; then
+        echo
+        read -r -p "A reboot may be required for kernel/group changes. Reboot now? [y/N] " RESPONSE
+        case "$RESPONSE" in
+            [yY][eE][sS]|[yY]) sudo /sbin/reboot ;;
+        esac
+    fi
+} 2>&1 | tee "$LOGS_UNINSTALL_LOG_FILE_PATH"

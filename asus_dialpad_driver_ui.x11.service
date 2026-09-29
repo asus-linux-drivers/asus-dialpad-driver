@@ -5,7 +5,7 @@ StartLimitIntervalSec=300
 
 [Service]
 Type=simple
-ExecStart=$INSTALL_DIR_PATH/.env/bin/python3 $INSTALL_DIR_PATH/dialpad_ui.py
+ExecStart="$INSTALL_DIR_PATH/.env/bin/python3" "$INSTALL_DIR_PATH/dialpad_ui.py"
 TimeoutSec=5
 Restart=on-failure
 RestartSec=1

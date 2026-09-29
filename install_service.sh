@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 
 source non_sudo_check.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/install_common.sh"
+dialpad_init_paths || exit 1
 
 # ENV VARS
-if [ -z "$CONFIG_FILE_DIR_PATH" ]; then
-    CONFIG_FILE_DIR_PATH="/usr/share/asus-dialpad-driver"
-fi
 if [ -z "$LAYOUT_NAME" ]; then
     LAYOUT_NAME="asusvivobook16x"
 fi
@@ -15,11 +14,9 @@ fi
 if [ -z "$SERVICE_INSTALL_DIR_PATH" ]; then
     SERVICE_INSTALL_DIR_PATH="$HOME/.config/systemd/user"
 fi
-if [ -z "$INSTALL_DIR_PATH" ]; then
-    INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
-fi
 if [ -z "$USER_INTERFACE" ]; then
-    USER_INTERFACE=1
+    USER_INTERFACE=$(dialpad_config_cli config-get socket_enabled) || exit 1
+    USER_INTERFACE=${USER_INTERFACE:-0}
 fi
 
 echo "Systemctl service(s)"
@@ -64,8 +61,8 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
         echo "Not detected package manager. Driver may not work properly because required packages have not been installed. Please create an issue (https://github.com/asus-linux-drivers/asus-dialpad-driver/issues)."
     fi
 
-    source $INSTALL_DIR_PATH/.env/bin/activate
-    pip3 install -r requirements.systemd.txt
+    source "$INSTALL_DIR_PATH/.env/bin/activate"
+    pip3 install -r "$DIALPAD_SOURCE_DIR/requirements.systemd.txt" || exit 1
 
     SERVICE=1
 
@@ -123,18 +120,12 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
 
     echo
 
-    if [ -n "$LOG" ]; then
-        LOG_ENV_LINE="Environment=\"LOG=$LOG\""
-    else
-        LOG_ENV_LINE=""
-    fi
-
+    mkdir -p -- "$SERVICE_INSTALL_DIR_PATH" || exit 1
     if [ "$XDG_SESSION_TYPE" == "x11" ]; then
-        cat "$SERVICE_X11_FILE_PATH" | INSTALL_DIR_PATH=$INSTALL_DIR_PATH LAYOUT_NAME=$LAYOUT_NAME CONFIG_FILE_DIR_PATH="$CONFIG_FILE_DIR_PATH/" DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS LOG_ENV_LINE=$LOG_ENV_LINE envsubst '$INSTALL_DIR_PATH $LAYOUT_NAME $CONFIG_FILE_DIR_PATH $DISPLAY $XAUTHORITY $XDG_RUNTIME_DIR $XDG_SESSION_TYPE $DBUS_SESSION_BUS_ADDRESS $LOG_ENV_LINE' | tee "$SERVICE_INSTALL_DIR_PATH/$SERVICE_INSTALL_FILE_NAME" >/dev/null
+        dialpad_render_service "$SERVICE_X11_FILE_PATH" "$SERVICE_INSTALL_DIR_PATH/$SERVICE_INSTALL_FILE_NAME"
     else
-        echo "Unfortunatelly you will not be able use feature: Disabling Touchpad (e.g. Fn+special key) disables DialPad aswell, at this moment is supported only X11"
-        # DISPLAY=$DISPLAY for Xwayland
-        cat "$SERVICE_WAYLAND_FILE_PATH" | INSTALL_DIR_PATH=$INSTALL_DIR_PATH LAYOUT_NAME=$LAYOUT_NAME CONFIG_FILE_DIR_PATH="$CONFIG_FILE_DIR_PATH/" DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS LOG_ENV_LINE=$LOG_ENV_LINE envsubst '$INSTALL_DIR_PATH $LAYOUT_NAME $CONFIG_FILE_DIR_PATH $DISPLAY $WAYLAND_DISPLAY $XDG_RUNTIME_DIR $XDG_SESSION_TYPE $DBUS_SESSION_BUS_ADDRESS $LOG_ENV_LINE' | tee "$SERVICE_INSTALL_DIR_PATH/$SERVICE_INSTALL_FILE_NAME" >/dev/null
+        echo "Touchpad disable synchronization is currently supported only on X11."
+        dialpad_render_service "$SERVICE_WAYLAND_FILE_PATH" "$SERVICE_INSTALL_DIR_PATH/$SERVICE_INSTALL_FILE_NAME"
     fi
 
     if [[ $? != 0 ]]; then
@@ -177,10 +168,9 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
         USER_INTERFACE_SERVICE_INSTALL_FILE_NAME="asus_dialpad_driver_ui@.service"
 
         if [ "$XDG_SESSION_TYPE" == "x11" ]; then
-            cat "$USER_INTERFACE_SERVICE_X11_FILE_PATH" | INSTALL_DIR_PATH=$INSTALL_DIR_PATH LAYOUT_NAME=$LAYOUT_NAME CONFIG_FILE_DIR_PATH="$CONFIG_FILE_DIR_PATH/" DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS LOG_ENV_LINE=$LOG_ENV_LINE envsubst '$INSTALL_DIR_PATH $LAYOUT_NAME $CONFIG_FILE_DIR_PATH $DISPLAY $XAUTHORITY $XDG_RUNTIME_DIR $XDG_SESSION_TYPE $DBUS_SESSION_BUS_ADDRESS $LOG_ENV_LINE' | tee "$SERVICE_INSTALL_DIR_PATH/$USER_INTERFACE_SERVICE_INSTALL_FILE_NAME" >/dev/null
+            dialpad_render_service "$USER_INTERFACE_SERVICE_X11_FILE_PATH" "$SERVICE_INSTALL_DIR_PATH/$USER_INTERFACE_SERVICE_INSTALL_FILE_NAME"
         else
-            # DISPLAY=$DISPLAY for Xwayland
-            cat "$USER_INTERFACE_SERVICE_WAYLAND_FILE_PATH" | INSTALL_DIR_PATH=$INSTALL_DIR_PATH LAYOUT_NAME=$LAYOUT_NAME CONFIG_FILE_DIR_PATH="$CONFIG_FILE_DIR_PATH/" DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS LOG_ENV_LINE=$LOG_ENV_LINE envsubst '$INSTALL_DIR_PATH $LAYOUT_NAME $CONFIG_FILE_DIR_PATH $DISPLAY $WAYLAND_DISPLAY $XDG_RUNTIME_DIR $XDG_SESSION_TYPE $DBUS_SESSION_BUS_ADDRESS $LOG_ENV_LINE' | tee "$SERVICE_INSTALL_DIR_PATH/$USER_INTERFACE_SERVICE_INSTALL_FILE_NAME" >/dev/null
+            dialpad_render_service "$USER_INTERFACE_SERVICE_WAYLAND_FILE_PATH" "$SERVICE_INSTALL_DIR_PATH/$USER_INTERFACE_SERVICE_INSTALL_FILE_NAME"
         fi
 
         echo
@@ -218,5 +208,7 @@ case "$RESPONSE" in [yY][eE][sS]|[yY])
             echo "Asus DialPad driver User Interface service started"
         fi
 
+    elif [[ -f "$SERVICE_INSTALL_DIR_PATH/asus_dialpad_driver_ui@.service" ]]; then
+        systemctl --user disable --now "asus_dialpad_driver_ui@$USER.service" || exit 1
     fi
 esac

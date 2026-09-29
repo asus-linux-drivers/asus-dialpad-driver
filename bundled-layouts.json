@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "layouts": [
+    "layouts/asusvivobook16x.py",
+    "layouts/proartp16.py",
+    "layouts/zenbookpro14.py"
+  ]
+}

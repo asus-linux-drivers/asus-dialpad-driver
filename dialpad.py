@@ -568,7 +568,7 @@ def send_value_to_touchpad(value):
     if send_value_to_touchpad_via_hidraw(value):
         return True
 
-    return send_value_to_touchpad(value)
+    return send_value_to_touchpad_via_i2c(value)
 
 def send_value_to_touchpad_via_i2c(value):
     global device_id, device_addr

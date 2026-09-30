@@ -1,78 +1,19 @@
 #!/usr/bin/env bash
 
-source non_sudo_check.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/non_sudo_check.sh"
+SERVICE_INSTALL_DIR_PATH=${SERVICE_INSTALL_DIR_PATH:-$HOME/.config/systemd/user}
 
-# ENV VARS
-if [ -z "$SERVICE_INSTALL_DIR_PATH" ]; then
-    SERVICE_INSTALL_DIR_PATH="$HOME/.config/systemd/user"
-fi
-
-SERVICE_INSTALL_FILE_NAME="asus_dialpad_driver@.service"
-SERVICE_INSTANCE_FILE_NAME="asus_dialpad_driver@$USER.service"
-
-systemctl --user stop "$SERVICE_INSTANCE_FILE_NAME"
-if [[ $? != 0 ]]
-then
-    echo "Something went wrong when stopping the $SERVICE_INSTANCE_FILE_NAME"
-else
-    echo "Service $SERVICE_INSTANCE_FILE_NAME stopped"
-fi
-
-systemctl --user disable "$SERVICE_INSTANCE_FILE_NAME"
-if [[ $? != 0 ]]
-then
-    echo "Something went wrong when disabling the $SERVICE_INSTANCE_FILE_NAME"
-else
-    echo "Service $SERVICE_INSTANCE_FILE_NAME disabled"
-fi
-
-sudo rm -f "$SERVICE_INSTALL_DIR_PATH/$SERVICE_INSTALL_FILE_NAME"
-if [[ $? != 0 ]]
-then
-    echo "Something went wrong when removing the $SERVICE_INSTALL_FILE_NAME"
-else
-    echo "Service $SERVICE_INSTANCE_FILE_NAME removed"
-fi
-
-systemctl --user daemon-reload
-
-if [[ $? != 0 ]]; then
-    echo "Something went wrong when was called systemctl daemon reload"
-else
-    echo "Systemctl daemon reloaded"
-fi
-
-SERVICE_INSTALL_FILE_NAME="asus_dialpad_driver_ui@.service"
-SERVICE_INSTANCE_FILE_NAME="asus_dialpad_driver_ui@$USER.service"
-
-systemctl --user stop "$SERVICE_INSTANCE_FILE_NAME"
-if [[ $? != 0 ]]
-then
-    echo "Something went wrong when stopping the $SERVICE_INSTANCE_FILE_NAME"
-else
-    echo "Service $SERVICE_INSTANCE_FILE_NAME stopped"
-fi
-
-systemctl --user disable "$SERVICE_INSTANCE_FILE_NAME"
-if [[ $? != 0 ]]
-then
-    echo "Something went wrong when disabling the $SERVICE_INSTANCE_FILE_NAME"
-else
-    echo "Service $SERVICE_INSTANCE_FILE_NAME disabled"
-fi
-
-sudo rm -f "$SERVICE_INSTALL_DIR_PATH/$SERVICE_INSTALL_FILE_NAME"
-if [[ $? != 0 ]]
-then
-    echo "Something went wrong when removing the $SERVICE_INSTALL_FILE_NAME"
-else
-    echo "Service $SERVICE_INSTANCE_FILE_NAME removed"
-fi
-
-systemctl --user daemon-reload
-
-if [[ $? != 0 ]]; then
-    echo "Something went wrong when was called systemctl daemon reload"
-else
-    echo "Systemctl daemon reloaded"
+# Editor-only or non-systemd installations must not touch unrelated running services.
+REMOVED_DIALPAD_SERVICE=0
+for SERVICE_NAME in asus_dialpad_driver_ui asus_dialpad_driver; do
+    SERVICE_INSTALL_FILE_PATH="$SERVICE_INSTALL_DIR_PATH/$SERVICE_NAME@.service"
+    [[ -f "$SERVICE_INSTALL_FILE_PATH" ]] || continue
+    SERVICE_INSTANCE_FILE_NAME="$SERVICE_NAME@$USER.service"
+    systemctl --user disable --now "$SERVICE_INSTANCE_FILE_NAME" || exit 1
+    rm -f -- "$SERVICE_INSTALL_FILE_PATH" || exit 1
+    REMOVED_DIALPAD_SERVICE=1
+    echo "Removed service: $SERVICE_INSTANCE_FILE_NAME"
+done
+if [[ "$REMOVED_DIALPAD_SERVICE" == 1 ]]; then
+    systemctl --user daemon-reload || exit 1
 fi

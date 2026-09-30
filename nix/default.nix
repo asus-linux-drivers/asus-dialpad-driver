@@ -7,8 +7,10 @@
 , i2c-tools
 , libxml2
 , libxkbcommon
+, qt6
 , waylandSupport ? false
 , x11Support ? true
+, layoutManagerSupport ? false
 }:
 
 python3Packages.buildPythonPackage {
@@ -20,7 +22,7 @@ python3Packages.buildPythonPackage {
     fs.toSource {
       root = ../.;
       fileset = fs.unions [
-        (fs.fileFilter (f: f.hasExt "py") ../.)
+        (fs.fileFilter (f: f.hasExt "py" || f.hasExt "json") ../.)
         ../layouts
         ../laptop_dialpad_layouts
       ];
@@ -39,7 +41,11 @@ python3Packages.buildPythonPackage {
   ] ++ lib.optionals x11Support [
     xlib
     xcffib
-  ] ++ lib.optional waylandSupport pywayland;
+  ] ++ lib.optional waylandSupport pywayland
+    ++ lib.optional layoutManagerSupport pyside6;
+
+  nativeBuildInputs = lib.optional layoutManagerSupport qt6.wrapQtAppsHook;
+  dontWrapQtApps = true;
 
   buildInputs = [
     ibus
@@ -51,28 +57,75 @@ python3Packages.buildPythonPackage {
     libxkbcommon
   ];
 
-  # Install files for driver and layouts
   installPhase = ''
-    mkdir -p $out/share/asus-dialpad-driver
+    runHook preInstall
+    data="$out/share/asus-dialpad-driver"
+    mkdir -p "$data/layouts" "$out/bin"
+    install -m755 dialpad.py "$data/dialpad.py"
+    install -m644 dialpad_layout.py dialpad_layout_linux.py dialpad_runtime.py \
+      dialpad_events.json bundled-layouts.json "$data/"
+    for layout in layouts/*.py layouts/*.json; do
+      [ ! -f "$layout" ] || install -m644 "$layout" "$data/layouts/"
+    done
 
-    # Copy the driver script
-    install -Dm755 dialpad.py $out/share/asus-dialpad-driver/dialpad.py
+    # Explicit, deterministic XDG configuration; no search among existing instances.
+    cat > "$out/bin/asus-dialpad-layout" <<EOF
+#!${python3Packages.python.interpreter}
+import os
+from pathlib import Path
+import runpy
+import sys
+root = "$data"
+sys.path.insert(0, root)
+config = os.environ.get("DIALPAD_CONFIG_DIR") or str(Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "asus-dialpad-driver")
+sys.argv[1:1] = ["--config-dir", config, "--install-dir", root]
+runpy.run_path(root + "/dialpad_layout.py", run_name="__main__")
+EOF
+    chmod +x "$out/bin/asus-dialpad-layout"
 
-    # Copy layouts directory if it exists, and remove __pycache__ if present
-    if [ -d layouts ]; then
-      cp -r layouts $out/share/asus-dialpad-driver/
-      rm -rf $out/share/asus-dialpad-driver/layouts/__pycache__
-    fi
+    ${lib.optionalString layoutManagerSupport ''
+      install -m644 dialpad_layout_manager.py dialpad_layout_editor.py dialpad_overlay.py \
+        dialpad_help.py dialpad_i18n.py "$data/"
+      mkdir -p "$data/locales"
+      install -m644 locales/en_US.json locales/zh_CN.json locales/zh_TW.json "$data/locales/"
+      cat > "$out/bin/asus-dialpad-layout-manager" <<EOF
+#!${python3Packages.python.interpreter}
+import os
+from pathlib import Path
+import runpy
+import sys
+root = "$data"
+sys.path.insert(0, root)
+config = os.environ.get("DIALPAD_CONFIG_DIR") or str(Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "asus-dialpad-driver")
+sys.argv[1:1] = ["--config-dir", config, "--install-dir", root]
+runpy.run_path(root + "/dialpad_layout_manager.py", run_name="__main__")
+EOF
+      chmod +x "$out/bin/asus-dialpad-layout-manager"
+      mkdir -p "$out/share/applications"
+      cat > "$out/share/applications/asus-dialpad-layout-manager.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=DialPad Layout Manager
+Comment=Edit and activate Asus DialPad layouts
+Exec=$out/bin/asus-dialpad-layout-manager
+Icon=input-gaming
+Terminal=false
+Categories=Settings;HardwareSettings;
+EOF
+    ''}
+    runHook postInstall
   '';
 
   preFixup = ''
-    # Change line endings to Unix format
-    sed -i 's/\r$//' $out/share/asus-dialpad-driver/dialpad.py
+    sed -i 's/\r$//' "$out/share/asus-dialpad-driver/dialpad.py"
   '';
 
-  # Patch shebangs (defaults to files in $out/bin)
   postFixup = ''
     wrapPythonProgramsIn "$out/share/asus-dialpad-driver" "$out $pythonPath"
+    wrapPythonProgramsIn "$out/bin" "$out $pythonPath"
+    ${lib.optionalString layoutManagerSupport ''
+      wrapProgram "$out/bin/asus-dialpad-layout-manager" "''${qtWrapperArgs[@]}"
+    ''}
   '';
 
   meta = {

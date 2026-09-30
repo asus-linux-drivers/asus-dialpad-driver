@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 
-source non_sudo_check.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/non_sudo_check.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/install_common.sh"
+dialpad_init_paths || exit 1
+
+dialpad_suggest_layout() {
+local configured available option
+configured=$(dialpad_config_cli config-get layout) || return
+if [[ -n "$LAYOUT_NAME" || -n "$configured" ]]; then
+    echo "Skipping automatic suggestions: an explicit layout is already selected."
+    return 0
+fi
 
 LAPTOP_NAME_FULL=$(cat /sys/devices/virtual/dmi/id/product_name)
 # LAPTOP_NAME_FULL="ROG Zephyrus Duo 15 SE GX551QR_GX551QR"
@@ -11,16 +21,16 @@ VENDOR_ID=$(cat /proc/bus/input/devices | grep ".*Touchpad\"$" | sort | cut -f 3
 # VENDOR_ID="04F3"
 
 # the base was provided by cz asus support and manually fixed + manually extended about missing laptops gathered from users by github issues and via GA
-SUGGESTED_LAYOUT=$(cat laptop_dialpad_layouts | grep "$LAPTOP_NAME" | head -1 | cut -d'=' -f2)
+SUGGESTED_LAYOUT=$(cat "$DIALPAD_SOURCE_DIR/laptop_dialpad_layouts" | grep "$LAPTOP_NAME" | head -1 | cut -d'=' -f2)
 
 # gathered from users via GA
 if [[ -z "$SUGGESTED_LAYOUT" ]]; then
-  SUGGESTED_LAYOUT=$(cat laptop_touchpad_dialpad_layouts.csv | grep "$LAPTOP_NAME_FULL" | sort -t , -k 6 -r | head -1 | cut -d',' -f4)
+  SUGGESTED_LAYOUT=$(cat "$DIALPAD_SOURCE_DIR/laptop_touchpad_dialpad_layouts.csv" | grep "$LAPTOP_NAME_FULL" | sort -t , -k 6 -r | head -1 | cut -d',' -f4)
 else
   LAYOUT_AUTO_SUGGESTION_BY_LAPTOP_PRODUCT=1
 fi
 if [[ -z "$SUGGESTED_LAYOUT" ]]; then
-  SUGGESTED_LAYOUT=$(cat laptop_touchpad_dialpad_layouts.csv | grep "$VENDOR_ID" | grep "$DEVICE_ID" | sort -t , -k 6 -r | head -1 | cut -d',' -f4)
+  SUGGESTED_LAYOUT=$(cat "$DIALPAD_SOURCE_DIR/laptop_touchpad_dialpad_layouts.csv" | grep "$VENDOR_ID" | grep "$DEVICE_ID" | sort -t , -k 6 -r | head -1 | cut -d',' -f4)
 elif [[ -z "$LAYOUT_AUTO_SUGGESTION_BY_LAPTOP_PRODUCT" ]]; then
   LAYOUT_AUTO_SUGGESTION_BY_LAPTOP_NAME=1
 fi
@@ -71,9 +81,9 @@ if [[ -z "$SUGGESTED_LAYOUT" || "$SUGGESTED_LAYOUT" == "none" ]]; then
             PROBE_LAPTOP_NAME_FULL="${array[INDEX]}"
             PROBE_LAPTOP_NAME=$( echo $PROBE_LAPTOP_NAME_FULL | rev | cut -d ' ' -f1 | rev | cut -d "_" -f1)
 
-            SUGGESTED_LAYOUT=$(cat laptop_dialpad_layouts | grep "$PROBE_LAPTOP_NAME" | head -1 | cut -d'=' -f2)
+            SUGGESTED_LAYOUT=$(cat "$DIALPAD_SOURCE_DIR/laptop_dialpad_layouts" | grep "$PROBE_LAPTOP_NAME" | head -1 | cut -d'=' -f2)
             if [[ -z "$SUGGESTED_LAYOUT" ]]; then
-              SUGGESTED_LAYOUT=$(cat laptop_touchpad_dialpad_layouts.csv | grep "$PROBE_LAPTOP_NAME_FULL" | head -1 | cut -d',' -f4)
+              SUGGESTED_LAYOUT=$(cat "$DIALPAD_SOURCE_DIR/laptop_touchpad_dialpad_layouts.csv" | grep "$PROBE_LAPTOP_NAME_FULL" | head -1 | cut -d',' -f4)
             else
               LAYOUT_AUTO_SUGGESTION_BY_LAPTOP_PRODUCT=1
             fi
@@ -102,31 +112,27 @@ else
   fi
 fi
 
-for OPTION in $(ls layouts); do
-    if [ "$OPTION" = "$SUGGESTED_LAYOUT.py" ]; then
-        echo
-        echo "DialPad layout"
-        echo
-        read -r -p "The automatically recommended DialPad layout for this laptop ($LAPTOP_NAME_FULL) is $SUGGESTED_LAYOUT. Do you want to use the $SUGGESTED_LAYOUT layout? (The photo of the recommended DialPad layout can be found here https://github.com/asus-linux-drivers/asus-dialpad-driver#$SUGGESTED_LAYOUT) [y/N]" RESPONSE
-        case "$RESPONSE" in [yY][eE][sS]|[yY])
-
-            echo
-
-            LAYOUT_AUTO_SUGGESTION=1
-
-            LAYOUT_NAME=$SUGGESTED_LAYOUT
-
-            SPECIFIC_BRIGHTNESS_VALUES="$LAYOUT_NAME-$DEVICE_ID"
-            if [ -f "layouts/$SPECIFIC_BRIGHTNESS_VALUES.py" ];
-            then
-                LAYOUT_NAME=$SPECIFIC_BRIGHTNESS_VALUES
-                echo "Selected key layout specified by touchpad ID: $DEVICE_ID"
-            fi
-
-            echo "Selected key layout: $LAYOUT_NAME"
-            ;;
-        *)
-            ;;
-        esac
+available=$(dialpad_config_cli list --identifiers) || return
+local suggestion=$SUGGESTED_LAYOUT
+while IFS= read -r option; do
+    if [[ "$option" == "$SUGGESTED_LAYOUT-$DEVICE_ID" ]]; then
+        suggestion=$option
+        break
     fi
-done
+done <<< "$available"
+while IFS= read -r option; do
+    if [[ "$option" == "$suggestion" ]]; then
+        echo
+        read -r -p "Use the recommended layout '$suggestion' for $LAPTOP_NAME_FULL? [y/N] " RESPONSE
+        case "$RESPONSE" in
+            [yY][eE][sS]|[yY])
+                LAYOUT_AUTO_SUGGESTION=1
+                LAYOUT_NAME=$suggestion
+                ;;
+        esac
+        break
+    fi
+done <<< "$available"
+}
+
+dialpad_suggest_layout || exit 1

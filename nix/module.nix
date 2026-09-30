@@ -13,6 +13,7 @@ let
   package = cfg.package.override {
     waylandSupport = lib.elem "wayland" cfg.sessionTypes;
     x11Support = lib.elem "x11" cfg.sessionTypes;
+    layoutManagerSupport = cfg.layoutManager.enable;
   };
 in {
   imports = [
@@ -37,6 +38,16 @@ in {
       '';
     };
 
+    layoutManager.enable = lib.mkOption {
+      default = false;
+      type = lib.types.bool;
+      description = ''
+        Install the standalone PySide6 layout manager and desktop entry.
+        This does not start a manager or floating-overlay service and can be enabled
+        without the hardware module or daemon for offline layout editing.
+      '';
+    };
+
     package = lib.mkPackageOption pkgs "asus-dialpad-driver" { };
 
     sessionTypes = lib.mkOption {
@@ -49,9 +60,12 @@ in {
     };
 
     layout = lib.mkOption {
-      type = lib.types.str;
+      type = lib.types.strMatching "[A-Za-z0-9][A-Za-z0-9_-]*";
       default = "proartp16";
-      description = "The layout identifier for the DialPad driver (e.g. proart16). This value is required.";
+      description = ''
+        Positional default layout identifier (e.g. proartp16). A nonempty layout in
+        the user's dialpad_dev takes precedence. This fallback is not persisted.
+      '';
     };
 
     defaultConfig = lib.mkOption {
@@ -81,8 +95,9 @@ in {
       };
       default = { };
       description = ''
-        Default configuration options for the Asus DialPad Driver on first run.
-        It’s recommended to use a user-level configuration manager for this file or manually define with `lib.generators.toINI { } { /* your config */ }`.
+        Defaults merged into still-missing configuration keys before daemon startup.
+        Existing settings, including an explicit layout selection, are preserved.
+        Configuration lives in the user's XDG config directory under asus-dialpad-driver.
       '';
     };
 
@@ -102,9 +117,11 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ package ];
-
+  config = lib.mkMerge [
+    (lib.mkIf (cfg.enable || cfg.layoutManager.enable) {
+      environment.systemPackages = [ package ];
+    })
+    (lib.mkIf cfg.enable {
     # Enable i2c
     hardware.i2c.enable = true;
 
@@ -123,9 +140,9 @@ in {
       serviceConfig = {
         Type = "simple";
         ConfigurationDirectory = "asus-dialpad-driver";
-        # Create a default config from the Nix config if missing
-        ExecStartPre = "${lib.getExe pkgs.bash} -c 'if [ ! -s %E/asus-dialpad-driver/dialpad_dev ]; then ${lib.getBin pkgs.coreutils}/bin/install -m 644 ${defaultConfigFile} %E/asus-dialpad-driver/dialpad_dev; fi'";
-        ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} %E/asus-dialpad-driver/";
+        # Merge missing defaults under the same lock/transaction as runtime and GUI edits.
+        ExecStartPre = "${package}/bin/asus-dialpad-layout --config-dir \"%E/asus-dialpad-driver\" config-defaults ${defaultConfigFile}";
+        ExecStart = "${package}/share/asus-dialpad-driver/dialpad.py ${cfg.layout} \"%E/asus-dialpad-driver/\"";
         # The script logs to the journal directly
         StandardOutput = "null";
         StandardError = "null";
@@ -140,5 +157,6 @@ in {
       path = [ pkgs.i2c-tools pkgs.qt6.qttools ];
     };
 
-  };
+    })
+  ];
 }

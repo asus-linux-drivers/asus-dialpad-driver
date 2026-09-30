@@ -18,7 +18,17 @@ case "$RESPONSE" in
         dialpad_install_qt_dependencies || exit 1
         install -m 644 -- "$DIALPAD_SOURCE_DIR/dialpad_layout_manager.py" \
             "$DIALPAD_SOURCE_DIR/dialpad_layout_editor.py" \
-            "$DIALPAD_SOURCE_DIR/dialpad_overlay.py" "$INSTALL_DIR_PATH/" || exit 1
+            "$DIALPAD_SOURCE_DIR/dialpad_overlay.py" \
+            "$DIALPAD_SOURCE_DIR/dialpad_help.py" \
+            "$DIALPAD_SOURCE_DIR/dialpad_i18n.py" "$INSTALL_DIR_PATH/" || exit 1
+        install -d -- "$INSTALL_DIR_PATH/locales" || exit 1
+        install -m 644 -- "$DIALPAD_SOURCE_DIR"/locales/{en_US,zh_CN,zh_TW}.json "$INSTALL_DIR_PATH/locales/" || exit 1
+        # Retire only the manager-owned source-text catalogs from older installs.
+        rm -f -- "$INSTALL_DIR_PATH/locales/en.json" || exit 1
+        for section in common help editor manager; do
+            rm -f -- "$INSTALL_DIR_PATH/locales/$section.zh_CN.json" \
+                "$INSTALL_DIR_PATH/locales/$section.zh_TW.json" || exit 1
+        done
         dialpad_install_launchers 1 || exit 1
         echo "Installed: $DIALPAD_BIN_DIR_PATH/asus-dialpad-layout-manager"
         echo "The manager can edit layouts offline; it does not start or enable a service."

@@ -84,7 +84,10 @@ EOF
     chmod +x "$out/bin/asus-dialpad-layout"
 
     ${lib.optionalString layoutManagerSupport ''
-      install -m644 dialpad_layout_manager.py dialpad_layout_editor.py dialpad_overlay.py "$data/"
+      install -m644 dialpad_layout_manager.py dialpad_layout_editor.py dialpad_overlay.py \
+        dialpad_help.py dialpad_i18n.py "$data/"
+      mkdir -p "$data/locales"
+      install -m644 locales/en_US.json locales/zh_CN.json locales/zh_TW.json "$data/locales/"
       cat > "$out/bin/asus-dialpad-layout-manager" <<EOF
 #!${python3Packages.python.interpreter}
 import os

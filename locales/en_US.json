@@ -1,0 +1,530 @@
+{
+  "common": {
+    "language": {
+      "label": "Interface language",
+      "system": "System default",
+      "restart_hint": "Language changes apply next time the manager starts.",
+      "save_failed": "Cannot save language preference",
+      "saved_hint": "Language preference saved. Restart the manager to apply it; your draft is unchanged.",
+      "names": {
+        "en_us": "English",
+        "zh_cn": "简体中文",
+        "zh_tw": "繁體中文"
+      }
+    }
+  },
+  "help": {
+    "window": {
+      "title": "DialPad Manager Help",
+      "search_placeholder": "Search help topics and explanations",
+      "search_accessible": "Search help",
+      "content_accessible": "Help explanation",
+      "no_results": "No matching help topics",
+      "shortcut_hint": "Press F1 for help.",
+      "topic_accessible": "Help: {topic}",
+      "open": "Help (F1)",
+      "action": "Help"
+    },
+    "topics": {
+      "overview": {
+        "title": "Getting started",
+        "body": "Copy a bundled preset, edit the user copy, validate it, and save it. Activate the saved revision only when you want the running driver to use it.\n\nNamed functions are the tool-ring entries. Direct center/rotation actions can also be used without a named tool ring. The geometry describes touchpad coordinates, not the size of the floating window.\n\nEditing, previews, and this help never execute layout commands. Activation can make the driver execute commands and value queries. Review imported presets before activating them."
+      },
+      "library": {
+        "title": "Preset library and file operations",
+        "body": "Built-in presets are protected: use Copy to create an editable user preset. New creates a draft; Import loads a reviewed JSON or statically readable Python layout; Export writes a portable JSON copy. Refresh rereads the library.\n\nRenaming or deleting an active preset requires the same driver instance to acknowledge a replacement revision first. The original file remains until then. Canceling a pending operation retains the original, but does not undo a replacement request already written to configuration."
+      },
+      "identity": {
+        "title": "Identifiers and display names",
+        "body": "A preset identifier selects a file and must match [A-Za-z0-9][A-Za-z0-9_-]*. It is not a path. The optional display name is only a label and never changes file selection.\n\nFunction identities and display titles are also separate. Rename changes a function identity and its references; Display title changes only the label shown to the user. Changing the interface language never translates stored names, commands, or paths."
+      },
+      "state": {
+        "title": "Draft, saved, requested, applied, and recovery state",
+        "body": "Draft is the in-memory edit; saved is the file revision; requested is the configured selection; applied is what the running driver acknowledged. A successful save or activation request is not proof that the driver applied it.\n\nHot reload waits for a complete no-contact boundary. A held gesture finishes with its original snapshot. Recovery is current only after the applied revision is durably recorded. Offline status cannot confirm activation."
+      },
+      "rules": {
+        "title": "Application matching and rule order",
+        "body": "Application keys match the executable path before the window title, using lowercase substring matching in stored order. A compositor class/app_id is not a separate matching field.\n\nThe reserved none rule is the fallback. An explicitly empty matched rule intentionally disables bindings for that application. Move up/down changes precedence; place more specific matches before broad ones."
+      },
+      "functions": {
+        "title": "Named functions and the tool ring",
+        "body": "Named functions become tool-ring entries in stored order, clockwise from the top. Add, rename, remove, or reorder them here; edit their title/icon and command in the metadata dialog.\n\ncenter, clockwise, and counterclockwise are reserved action regions, not function names. Switching editor views does not delete direct actions or named functions.\n\nPreview uses the live overlay renderer with static base icons and slices_minimum_count padding. It does not execute commands or queries, guess conditional icons, or simulate live gesture values. The neutral preview background differs from the transparent desktop overlay."
+      },
+      "actions": {
+        "title": "Actions and alternative order",
+        "body": "Select center, clockwise, or counterclockwise, then add or edit an action. Alternatives retain their order, but modifier-specific alternatives take precedence over unmodified alternatives.\n\nAn action can emit keys, relative-axis events, run a shell command, or only control selection. A function may be command-only; no dummy key binding is required. Removing an action changes only the selected alternative."
+      },
+      "action_type": {
+        "title": "Choosing an action type",
+        "body": "Keyboard combination emits the selected ordered key/button events. Relative-axis events emit signed numeric values such as REL_WHEEL. Shell command runs a command in the driver. Control / selection only performs no key or shell output.\n\nChanging type does not automatically discard incompatible event rows. Review them before accepting; validation reports incompatible combinations. Keyboard actions may also include a command."
+      },
+      "events": {
+        "title": "Event names, combinations, and relative values",
+        "body": "Search the catalog by event name, such as volume or ctrl. Add selected events and order them as the desired combination. Event identifiers such as KEY_LEFTCTRL and REL_WHEEL are stored unchanged.\n\nRelative values are signed integers, not percentages or display-value queries. When combining REL_WHEEL and REL_WHEEL_HI_RES, specify each event's intended numeric value. Removing/reordering rows preserves the remaining event/value pairs."
+      },
+      "modifier": {
+        "title": "Required modifier",
+        "body": "An optional modifier such as KEY_LEFTSHIFT makes this alternative eligible only while that key is held. It is a condition, not another emitted key.\n\nLeave it empty for an unmodified alternative. Modifier-specific alternatives take precedence. Use the exact catalog event name; the interface does not translate it or infer keyboard-language characters."
+      },
+      "trigger": {
+        "title": "Action trigger",
+        "body": "release runs when the gesture is released after its conditions are met. immediate runs when its gesture conditions become eligible, without waiting for release.\n\nThe selector may show translated labels, but the stored values remain release and immediate. Rotation thresholds and minimum hold duration still apply where relevant."
+      },
+      "duration": {
+        "title": "Minimum hold duration",
+        "body": "Duration is a nonnegative number of seconds the gesture must satisfy before the action is eligible. It is not a delay inserted after a shortcut.\n\nZero requires no additional hold time. Review trigger and rotation threshold together when choosing gesture timing."
+      },
+      "command": {
+        "title": "Shell commands and trust",
+        "body": "This is executable shell text, not a label. The driver executes it as the current user when the action or named function is triggered. A keyboard action can also include a command.\n\nThe editor and help do not execute it. Do not activate an untrusted imported command merely to preview a layout; activation can also start display queries."
+      },
+      "title": {
+        "title": "Display title",
+        "body": "A display title labels a function or action without renaming its identity or changing its output. A named function normally falls back to its identity when no title is set.\n\nLong tool labels wrap and then use an ellipsis. The full supplied titles are available in the canvas tooltip. User-authored titles are never translated with the interface."
+      },
+      "icon": {
+        "title": "Icon file or theme name",
+        "body": "Use a local image path (for example, an SVG) or an installed icon-theme name. Prefer an absolute path when using a file; a relative path depends on the process working directory.\n\nMissing or unreadable icons fall back to the display title. Import/export does not copy icon assets, and an absolute icon path from another desktop may not exist here. The preview resolves base icons locally without running a query."
+      },
+      "unit": {
+        "title": "Displayed unit",
+        "body": "Unit is text appended to the displayed value, such as % or dB. It does not convert the value or change emitted relative events.\n\nThe static preview does not run the display-value query, so it does not invent a value to show beside the unit."
+      },
+      "value": {
+        "title": "Display-value query",
+        "body": "A display-value query is shell text whose output the driver reads for feedback. It can run during activation or metadata refresh, not only after an output action. Review it as executable code.\n\nStatic editing and previews never evaluate it. Relative-axis actions instead use numeric event values; their display-query field is disabled to avoid mixing the two meanings of value."
+      },
+      "threshold": {
+        "title": "Rotation threshold (treshold)",
+        "body": "Enable Override to set a positive rotation threshold in degrees for this entry. Without an override, the existing driver/default threshold applies.\n\nThe historical configuration spelling treshold is intentional and is preserved in saved layouts. This is a gesture threshold, not the diameter of the rendered ring."
+      },
+      "conditional_icons": {
+        "title": "Conditional icon mapping",
+        "body": "Map an exact display-query result to an icon file or theme name. Query-result keys must be unique. These are result strings, not shell commands themselves.\n\nOnly the driver evaluates the query and chooses a conditional icon. The static preview shows the base icon or text fallback instead of guessing the result. Removing a row removes only that result mapping."
+      },
+      "geometry": {
+        "title": "Touchpad geometry",
+        "body": "Coordinates and diameters are absolute touchpad units, not screen pixels. The driver-reported device bounds allow validation; without them the canvas is schematic, not calibrated.\n\nDrag the circle interior to move it and the square handles to resize the outer circle, center button, or top-right activation region. The activation region stays anchored at the top right. These controls do not resize the floating overlay."
+      },
+      "raw_json": {
+        "title": "Raw JSON draft",
+        "body": "Raw JSON is a separate draft. Apply JSON to forms validates it before replacing structured values; invalid text is retained. Discard raw draft restores the last valid form representation.\n\nWhile an unapplied raw draft exists, structured editing is blocked to avoid overwriting it. Save cannot silently ignore invalid raw text. JSON fields and event identifiers remain unchanged by interface translation."
+      },
+      "save_activate": {
+        "title": "Save, reload, and activate",
+        "body": "Validate checks the current document without executing it. Save writes the preset but does not change the selected layout identifier; saving an active file requests a safe reload. Activate saved revision requests that exact saved revision and waits for runtime acknowledgment.\n\nReload file discards local edits only after confirmation. External changes are not silently overwritten: reload them or save a separate copy. Closing the manager leaves the driver running."
+      },
+      "trust": {
+        "title": "Trusted Python conversion",
+        "body": "Ordinary Python-layout import uses static parsing and never executes the file. Unsupported dynamic Python is rejected rather than guessed.\n\nTrust Python and convert is an explicit execution boundary: it runs the reviewed Python as your user. Side effects cannot be rolled back by the editor. This permission does not authorize the driver to execute other dynamic Python layouts, and offline conversion does not offer this execution path."
+      },
+      "language": {
+        "title": "Interface language",
+        "body": "System default uses Simplified Chinese for Chinese locales except Traditional Chinese regions/scripts, Traditional Chinese for zh_TW/zh_HK/zh_MO or Hant, and English for other languages. You can explicitly choose any supported interface language.\n\nThe preference is stored in the per-user manager settings, not dialpad_dev or the preset. It takes effect the next time the manager starts; changing it never rebuilds an open window or discards drafts. User data, command text, paths, and backend error details retain their original text."
+      },
+      "troubleshooting": {
+        "title": "Troubleshooting and verification limits",
+        "body": "If editing controls are disabled, check whether the preset is bundled/read-only, a raw draft is unapplied, or a rename/deletion is pending. Copy a built-in before editing. Offline mode allows editing but cannot activate or confirm a running revision.\n\nA saved/requested revision is not an applied acknowledgment. Check the instance/revision status and driver logs when activation is pending or rejected. Missing icons may belong to a desktop theme not installed here.\n\nReal login startup, suspend/resume, Nix builds, other desktop sessions/platforms, physical tool selection after rendering changes, and live value/conditional-icon feedback require separate acceptance. See docs/issue-31-layout-manager-plan.md for the evidence and outstanding checklist."
+      }
+    }
+  },
+  "editor": {
+    "draft": {
+      "apply_before_save": "Apply or discard the raw JSON draft before saving"
+    },
+    "rename": {
+      "already_exists": "{name} already exists"
+    },
+    "metadata": {
+      "title": "Display title",
+      "icon": "Icon file path or theme name",
+      "unit": "Unit",
+      "command": "Shell command",
+      "value": "Display-value query",
+      "driver_only_placeholder": "Executed by the driver only, never by this preview",
+      "icon_placeholder": "Path to an SVG file, or an icon-theme name",
+      "icon_hint": "Missing or unreadable icons fall back to the label.",
+      "relative_value_tooltip": "Relative events use numeric values, not a display query",
+      "override": "Override",
+      "degrees_suffix": " degrees",
+      "threshold_row": "Rotation threshold (treshold)",
+      "query_result_column": "Query result",
+      "icon_column": "Icon (file path or theme name)",
+      "conditional_icons": "Conditional icons",
+      "add_icon": "Add icon",
+      "remove_icon": "Remove icon",
+      "error": {
+        "unique_icons": "Conditional icon query results must be unique"
+      }
+    },
+    "function": {
+      "title": "Tool-ring function metadata — {name}",
+      "note": "The display title and icon are what the tool-ring slice shows. A command-only function is valid. Rotation bindings are optional.",
+      "invalid_metadata": "Invalid metadata"
+    },
+    "action": {
+      "edit_title": "Edit shortcut action",
+      "add_title": "Add shortcut action",
+      "kind": {
+        "keys": "Keyboard combination",
+        "relative": "Relative-axis events",
+        "command": "Shell command",
+        "control": "Control / selection only"
+      },
+      "type_label": "Action type",
+      "modifier_label": "Required modifier (optional)",
+      "trigger": {
+        "release": "On gesture release",
+        "immediate": "Immediately when matched"
+      },
+      "trigger_label": "Trigger",
+      "duration_label": "Minimum hold duration",
+      "duration_suffix": " seconds",
+      "command_label": "Shell command",
+      "command_placeholder": "Optional alongside keys; runs only in the driver",
+      "events_group": "Output events — ordered combination / numeric relative values",
+      "search_placeholder": "Search event names, e.g. volume or ctrl",
+      "add_event": "Add selected event",
+      "event_column": "Event",
+      "value_column": "Numeric value",
+      "remove_event": "Remove",
+      "event_up": "Up",
+      "event_down": "Down",
+      "metadata_group": "Display metadata — static preview never runs queries",
+      "relative_value_tooltip": "Signed integer event value",
+      "error": {
+        "signed_integers": "Relative event values must be signed integers",
+        "no_events": "Add at least one event, or choose a command/control action",
+        "remove_keyboard": "Remove keyboard events before using relative-axis mode",
+        "remove_relative": "Remove relative events before using keyboard mode",
+        "command_required": "Enter a shell command, or choose a control-only action",
+        "invalid": "Invalid action: {detail}"
+      }
+    },
+    "geometry": {
+      "circle_center_x": "Circle center X",
+      "circle_center_y": "Circle center Y",
+      "circle_diameter": "Outer diameter",
+      "center_button_diameter": "Center button diameter",
+      "top_right_icon_width": "Activation region width",
+      "top_right_icon_height": "Activation region height",
+      "canvas_tooltip": "Drag the circle to move it. Drag square handles to resize the outer circle, center button, or top-right activation region.",
+      "measured_bounds": "Measured device bounds · absolute touchpad coordinates",
+      "schematic": "Schematic · device bounds unknown · absolute coordinates",
+      "activation_region": "Activation",
+      "drag_to_move": "Drag to move"
+    },
+    "preview": {
+      "caption": "Tool-ring appearance · live overlay canvas · {width}×{height}",
+      "order_named": "{count} named functions · {slices} slices clockwise from the top · {padding} empty padding slice(s) from slices_minimum_count = {minimum}",
+      "order_single": "Single function / shared controls: no named tool-ring entries, so no slice carries a function label. Named functions in the Application rules & shortcuts tab become the tool-ring entries.",
+      "static_note": "Static appearance only: commands, display-value queries, and conditional icon-query results are never run."
+    }
+  },
+  "manager": {
+    "window": {
+      "title": "DialPad Layout Manager"
+    },
+    "runtime": {
+      "offline": "Offline editing — activation is unavailable",
+      "disabled": "Linux runtime integration is disabled; offline editing remains available",
+      "unavailable": "Driver unavailable — offline editing only ({error})"
+    },
+    "state": {
+      "config_path": "Configuration: {path}",
+      "source_bundled": "Bundled preset · read-only — Copy to edit",
+      "source_user": "User preset",
+      "overrides_inline": "\nOverrides: {paths}",
+      "source_descriptor": "{identifier} · {provenance} · {format}\n{path}",
+      "new_draft": "New user draft · no file saved · identifier is chosen when saving",
+      "unapplied_raw": "Unapplied raw draft",
+      "unsaved": "Unsaved draft",
+      "saved": "Saved, unchanged",
+      "no_document": "No editable document",
+      "running": "Saved revision is running",
+      "not_running": "Saved revision is not confirmed running",
+      "running_with_draft": "{running}; draft is not running",
+      "summary": "{state} · saved revision: {revision}\n{running}",
+      "revision_tooltip": "Saved source revision: {revision}\nApplied revision: {applied}",
+      "pending_rename": "Waiting for {replacement} @ {revision} to be applied before the rename. Original file is retained until exact acknowledgment.",
+      "pending_deletion": "Waiting for {replacement} @ {revision} to be applied before the deletion. Original file is retained until exact acknowledgment.",
+      "acknowledged": "Driver acknowledged {identifier} @ {revision}.",
+      "applied": "Driver applied {identifier} @ {revision}.",
+      "requested": "Manager requested {identifier} @ {revision}; not yet acknowledged by the same driver instance.",
+      "config_error": "Configuration error: {error}",
+      "config_request": "Configured request: {identifier}",
+      "config_default": "Configured request: no override (driver argv default)",
+      "identity": "{identifier} @ {revision}",
+      "driver_summary": "{config} · Driver: {state}\nRequested: {requested} · Applied: {running} · generation {generation}",
+      "recovery_warning": "\nRecovery is not current: {detail}",
+      "recovery_detail": "durability not confirmed",
+      "instance_tooltip": "Instance: {instance}\nRequested revision: {requested}\nApplied revision: {applied}",
+      "offline_summary": "{config} · {error}",
+      "instance_changed_title": "Runtime instance changed",
+      "instance_changed_body": "The pending file operation was canceled. The original file has been retained. Review the new instance before trying again.",
+      "replacement_rejected_title": "Replacement was rejected",
+      "replacement_rejected_body": "No file was removed. The running layout is retained; choose a valid replacement before renaming/deleting.",
+      "driver": {
+        "pending": "pending",
+        "applied": "applied",
+        "rejected": "rejected",
+        "recovered": "recovered",
+        "requested": "requested",
+        "unknown": "unknown"
+      }
+    },
+    "library": {
+      "title": "Shortcut presets",
+      "filter_placeholder": "Filter identifiers / provenance",
+      "buttons": {
+        "new": "New",
+        "copy": "Copy…",
+        "import": "Import…",
+        "export": "Export…",
+        "rename": "Rename…",
+        "delete": "Delete…",
+        "refresh": "Refresh library"
+      },
+      "select_placeholder": "Select a layout or create a new preset.",
+      "discover_failed": "Cannot discover layouts",
+      "item": {
+        "bundled": "{identifier}\nbundled · read-only · {format}",
+        "user": "{identifier}\nuser · {format}",
+        "overrides_suffix": " · overrides {count}",
+        "tooltip_overrides": "\nOverrides:\n{paths}"
+      },
+      "name_required": "A nonempty name is required"
+    },
+    "identity": {
+      "display_name_placeholder": "Optional display name; never a file path",
+      "display_name": "Display name"
+    },
+    "actions": {
+      "cancel_pending": "Cancel pending rename / deletion",
+      "trust_convert": "Trust Python and convert…",
+      "reload_file": "Reload file",
+      "validate": "Validate",
+      "save": "Save",
+      "activate": "Activate saved revision",
+      "buttons": {
+        "add": "Add action…",
+        "edit": "Edit…",
+        "remove": "Remove",
+        "up": "Up",
+        "down": "Down"
+      },
+      "precedence_note": "Modifier-specific alternatives take precedence; order is retained within each precedence group.",
+      "save_active": "Save & request reload",
+      "save_tooltip": "Saving an active file requests a runtime reload. Save never changes the selected layout identifier.",
+      "item": {
+        "key_command": "{keys} + shell command",
+        "command": "Command: {command}",
+        "control": "Control / selection",
+        "value_suffix": "{description} = {values}",
+        "modifier_prefix": "[{modifier}] {description}",
+        "titled": "{index}. {title} · {description}",
+        "plain": "{index}. {description}",
+        "hold": "\n{trigger} · hold {duration} s"
+      },
+      "triggers": {
+        "release": "release",
+        "immediate": "immediate"
+      }
+    },
+    "status": {
+      "static_note": "Static editing and previews never execute layout commands"
+    },
+    "rules": {
+      "note": "Rules are tested in their stored order. ‘none’ is the fallback; an empty rule intentionally has no bindings.",
+      "buttons": {
+        "add": "Add",
+        "rename": "Rename",
+        "remove": "Remove",
+        "move_up": "Move up",
+        "move_down": "Move down"
+      },
+      "mode": {
+        "single": "Single function / shared controls",
+        "multifunction": "Multifunction / named functions"
+      },
+      "tab": "Application rules & shortcuts",
+      "mapping": {
+        "none_selected": "Select an application rule.",
+        "empty": "Empty mapping: no bindings and no tool-ring entries. Add direct actions or a named function.",
+        "combined": "Combined direct controls and named functions (the tool-ring entries)",
+        "multifunction": "Multifunction mapping: the named functions are the tool-ring entries, in this stored order",
+        "single": "Single-function mapping: no named tool-ring entries, so the ring carries no labeled slices",
+        "suffix": "{description}. Switching editor views never deletes either set of bindings."
+      },
+      "add_title": "Add application rule",
+      "name_label": "Application executable / matching rule:",
+      "duplicate_title": "Duplicate rule",
+      "duplicate_body": "That application rule already exists",
+      "fallback_title": "Fallback rule",
+      "fallback_rename_body": "The required ‘none’ fallback cannot be renamed",
+      "rename_title": "Rename rule",
+      "fallback_remove_body": "The required ‘none’ fallback cannot be removed; its bindings may be empty",
+      "remove_title": "Remove application rule",
+      "remove_body": "Remove {name} and all of its bindings?"
+    },
+    "functions": {
+      "title": "Named functions · tool-ring entries · stored order runs clockwise from the top",
+      "buttons": {
+        "add": "Add function",
+        "rename": "Rename",
+        "remove": "Remove",
+        "up": "Up",
+        "down": "Down"
+      },
+      "metadata": "Command / display metadata…",
+      "preview_ring": "Preview tool ring",
+      "preview_ring_tooltip": "Show the static tool-ring appearance in the Geometry & static preview tab. Commands and value queries are not run.",
+      "preview_status": "Tool-ring preview uses the same canvas as the live overlay; commands and value queries are not run.",
+      "add_title": "Add named function",
+      "add_label": "Function identity (order determines its ring slice):",
+      "invalid_name_title": "Invalid function name",
+      "name_conflict_body": "The name already exists or is reserved for a direct binding",
+      "rename_title": "Rename function",
+      "rename_label": "Function identity:",
+      "reserved_title": "Reserved name",
+      "reserved_body": "Direction names cannot be used as function identities",
+      "duplicate_title": "Duplicate function",
+      "remove_title": "Remove named function",
+      "remove_body": "Remove {name} and its actions?",
+      "invalid_metadata_title": "Invalid function metadata"
+    },
+    "directions": {
+      "center": "Center button",
+      "clockwise": "Clockwise rotation",
+      "counterclockwise": "Counterclockwise rotation"
+    },
+    "geometry": {
+      "template": "Hardware template · absolute touchpad coordinates",
+      "instructions": "Move the circle by dragging its interior. Square handles resize the outer circle, center button, and activation region. The activation region stays anchored at the top right.\n\nDevice information, when available, validates the template; the schematic is not calibration. Overlay appearance is independent of touchpad geometry.",
+      "tab": "Geometry & static preview"
+    },
+    "raw": {
+      "note": "Raw changes remain a separate draft until Apply succeeds. Invalid JSON never replaces the form or saved file.",
+      "apply": "Apply valid JSON to forms",
+      "discard": "Discard raw changes",
+      "tab": "Raw JSON",
+      "pending_note": "Unapplied raw draft. Apply valid JSON or discard raw changes before structured editing / saving.",
+      "invalid_body": "Raw draft is invalid and has been preserved:\n{error}",
+      "discard_title": "Discard raw JSON draft",
+      "discard_body": "Discard unapplied raw text and restore the last valid form?",
+      "apply_title": "Unapplied raw JSON",
+      "apply_body": "Apply the raw JSON draft before continuing? Invalid text will remain untouched."
+    },
+    "validation": {
+      "open_failed": "Cannot open this selected source. No lower-priority file was substituted.\n{error}\nPython code has not been executed.",
+      "valid_layout": "Valid layout · commands and value queries have not been executed",
+      "valid_raw": "Valid raw draft (not applied to forms)",
+      "valid_layout_plain": "Valid layout · no commands executed",
+      "imported": "Imported statically from {path}. Original unchanged. {count} command/query fields were not executed; review their trust before activation.",
+      "trusted_converted": "Trusted Python executed for conversion. Save a distinct JSON copy before activation; original source unchanged."
+    },
+    "common": {
+      "none": "none"
+    },
+    "operations": {
+      "guard": {
+        "pending_title": "File operation pending",
+        "pending_body": "Wait for acknowledgment, or cancel the pending rename/deletion first. The original is still retained.",
+        "draft_title": "Unsaved layout draft",
+        "draft_body": "Save your changes before leaving this draft? Discard also discards unapplied raw text."
+      },
+      "copy": {
+        "title": "Save user copy",
+        "label": "New identifier (letters, digits, underscores, hyphens):",
+        "identifier_exists": "This identifier is already installed. Choose a distinct identifier; existing presets are not overwritten by Copy.",
+        "destination_exists": "The destination already exists",
+        "failed_title": "Cannot create copy",
+        "invalid_title": "Invalid layout",
+        "copy_failed_title": "Copy failed",
+        "saved_status": "User copy saved. It has not been activated."
+      },
+      "save": {
+        "external_change": "The selected file changed externally. Reload it or save your draft as a new copy.",
+        "read_only_title": "Bundled preset is read-only",
+        "read_only_body": "Use Copy to create a distinct user preset",
+        "confirm_title": "Saving may request a live reload",
+        "confirm_body": "Saving changes the watched preset file. If the driver is using it, this requests a reload; the running revision changes only after acknowledgment. Without live status, the current runtime selection cannot be confirmed. Continue?",
+        "failed_title": "Save failed — draft retained",
+        "saved_status": "Saved atomically. See runtime status for the actually applied revision."
+      },
+      "rename": {
+        "conflict_title": "External revision conflict",
+        "reload_button": "Reload external file",
+        "copy_button": "Save a new copy…",
+        "discard_title": "Discard local changes",
+        "discard_body": "Reloading discards this local draft. Continue?",
+        "failed_title": "Rename not completed",
+        "failed_body": "{error}\nThe original is retained on failure. Any newly saved copy is kept to avoid data loss.",
+        "source_changed": "The original layout source changed before removal",
+        "original_title": "Original retained",
+        "original_body": "{error}\nNo original file was removed.",
+        "saved_status": "Renamed {identifier} after exact-revision acknowledgment"
+      },
+      "reload": {
+        "external_failed_title": "Cannot reload external file",
+        "failed_title": "Cannot reload"
+      },
+      "import": {
+        "dialog_title": "Import layout without executing code",
+        "filter": "DialPad layouts (*.json *.py)",
+        "failed_title": "Static import failed — original preserved",
+        "failed_body": "{error}\n\nDynamic Python is not executed by Import. Retain it unchanged, or select an installed Python layout and explicitly choose Trust Python and convert."
+      },
+      "export": {
+        "invalid_title": "Invalid export",
+        "dialog_title": "Export normalized JSON",
+        "filter": "JSON layout (*.json)",
+        "protected": "Export cannot overwrite an installed preset. Use Save or select a different export path.",
+        "replace_title": "Replace export file",
+        "replace_body": "Replace {path}?",
+        "failed_title": "Export failed",
+        "saved_status": "Exported to {path}; editor save/activation state unchanged"
+      },
+      "ownership": {
+        "user_only": "Only user-owned layout files can be modified",
+        "symlink_refused": "Refusing to modify a symlink or a source outside the user layout directory; save a new copy instead"
+      },
+      "refused": {
+        "offline_title": "Safe offline refusal",
+        "offline_body": "Cannot prove which layout this driver instance is using. Rename/deletion is disabled until live status is available. Copy and export remain available; no files were removed.",
+        "title": "File operation refused",
+        "changed": "The active selection changed or became unavailable. The original is retained; retry with an acknowledged replacement."
+      },
+      "delete": {
+        "replace_required_title": "Replacement required",
+        "replace_required_body": "Create another preset first. The last active preset cannot be deleted.",
+        "select_title": "Replacement required before deletion",
+        "select_label": "Activate this replacement and wait for acknowledgment:",
+        "confirm_title": "Delete after replacement is applied",
+        "confirm_body": "Delete {name} only after {replacement} at revision {revision} is confirmed applied?",
+        "replacement_failed_title": "Replacement request failed — original retained",
+        "confirm_plain_title": "Delete user preset",
+        "confirm_plain_body": "Permanently delete {path}? This cannot be undone.",
+        "failed_title": "Delete failed",
+        "deleted_status": "Preset deleted. Select another layout or create a new preset.",
+        "saved_status": "Deleted {identifier} after exact-revision acknowledgment"
+      },
+      "display_replacement_failed_title": "Cannot display replacement",
+      "removal": {
+        "canceled_status": "File removal canceled; original retained. The already-persisted replacement activation request is not rolled back.",
+        "close_title": "Cancel pending file operation?",
+        "close_body": "Closing cancels file removal and retains the original. The replacement activation request remains in configuration. Close?"
+      }
+    },
+    "trust": {
+      "confirm_title": "Trust commands in this preset?",
+      "confirm_body": "Activating this preset allows the driver to run its shell actions and display-value queries as your user. Validation and previews did not execute them. Activate only if you trust the source and these commands.",
+      "unavailable_title": "Activation unavailable",
+      "activation_failed_title": "Activation request failed",
+      "requested_status": "Requested {identifier} @ {revision}; waiting for runtime acknowledgment",
+      "convert_title": "Execute trusted Python once for conversion?",
+      "convert_body": "{path}\n\nThis will execute arbitrary Python as your user, including imports and side effects. Failure cannot undo those effects. Only proceed if you trust this file and its imports. The result becomes an unsaved JSON copy; the original remains unchanged. This does not enable dynamic Python in the driver.",
+      "convert_failed_title": "Trusted conversion failed"
+    }
+  }
+}

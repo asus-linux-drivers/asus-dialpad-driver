@@ -378,6 +378,34 @@ Raw JSON is a separate editable draft. **Apply JSON to forms** validates before 
 
 Rename/deletion retains the original until the same driver instance acknowledges the exact replacement revision. Concurrent activation/removal uses the configuration sidecar transaction. Without live status these destructive operations refuse safely; copying and exporting remain available. Canceling a pending removal retains the original but does not undo an already persisted replacement request.
 
+### Built-in help and interface language
+
+Use **Help (F1)** to open the searchable offline help center. Nearby **?** buttons explain the associated field or group of actions; **F1** opens the topic for the focused control, including inside shortcut/metadata dialogs. Help remains available when editing is disabled. It covers application precedence, named-function tools, event/modifier/trigger semantics, geometry, raw JSON, revision/activation state, and execution/trust boundaries. Opening help never contacts the driver, runs a command, or opens an external website.
+
+The manager supports **English**, **Simplified Chinese**, and **Traditional Chinese**, including the help content. **System default** selects Chinese according to the system language/region/script and otherwise falls back to English. Use the **Interface language** selector to override it. Changes take effect on the **next manager start**; the open window and any unsaved or invalid raw draft remain intact.
+
+The preference is stored separately with Qt `QSettings` (`IniFormat`, organization `asus-dialpad-driver`, application `layout-manager`, key `ui/language`). On Linux this normally resolves to `${XDG_CONFIG_HOME:-$HOME/.config}/asus-dialpad-driver/layout-manager.ini`. It is not written into `dialpad_dev` or a layout, and driver uninstallation does not remove this per-user UI preference.
+
+Interface translation does not change identifiers, application rules, user-authored titles, commands, event names, file paths, protocol values such as `release`/`immediate`, or raw backend error details. The CLI and log diagnostics retain their original text.
+
+Translation resources are three independent UTF-8 files: `locales/en_US.json`, `locales/zh_CN.json`, and `locales/zh_TW.json`. The language identifier used by the selector and by the per-user preference is the catalog file name without `.json`, so `en_US` is chosen and stored rather than a bare `en`. Each file is a nested JSON object with `common`, `help`, `editor`, and `manager` namespaces. Code looks up a stable semantic path, for example `tr("manager.actions.save")`; English display text is never a lookup key. Each path segment matches `[a-z][a-z0-9_]*`, with dots separating levels and no spaces:
+
+```json
+{
+  "manager": {
+    "actions": {
+      "save": "Save"
+    }
+  }
+}
+```
+
+The same nested path appears in all three language files. Changing English wording does not rename its key. Translations must retain named `{placeholders}`; user values are formatted once after lookup. Missing or incompatible translated entries fall back to the English file, and catalog load failures are logged. English is a required resource; invalid lookup syntax and paths missing from English raise errors rather than displaying message IDs or treating them as English text. No source-text compatibility lookup remains. A per-user preference still stored as the earlier bare `en` keeps selecting English; the next language selection writes the standard identifier.
+
+No catalog compilation tool or additional dependency is required. Ordinary manager installation and the optional Nix manager package include all three files; upgrading retires only the old manager-owned section catalogs and the pre-rename `en.json`. Uninstallation preserves unrelated files under `locales/`. The headless driver and floating overlay do not import the help or i18n modules.
+
+Unverified hardware/platform behavior is tracked separately in the [outstanding verification checklist](docs/issue-31-layout-manager-plan.md#outstanding-verification-checklist). Built-in help describes behavior but does not replace those acceptance checks.
+
 ### Files, identity, and selection
 
 The driver searches `<config_dir>/layouts/` before `<driver_install_dir>/layouts/`, deduplicating equivalent directories. Within each directory, `<id>.json` wins over `<id>.py`; directory priority comes first. An invalid higher-priority file is an error, not permission to load a lower-priority file silently.

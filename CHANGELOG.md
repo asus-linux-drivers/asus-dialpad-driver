@@ -9,6 +9,8 @@
 - Application/function/action editors, searchable event selection, numeric and interactive geometry editing, a static function-ring preview, and a separate raw JSON draft.
 - `asus-dialpad-layout` CLI, per-configuration read-only runtime status, exact-revision activation acknowledgment, and durable last-successful layout recovery.
 - Optional standalone manager/desktop installation and Nix `layoutManagerSupport` / `layoutManager.enable` integration, without adding Qt to headless installations.
+- Searchable offline manager help with contextual question buttons and F1 navigation, including field semantics, runtime revision states, and command/Python trust boundaries.
+- English, Simplified Chinese, and Traditional Chinese manager/editor/help interfaces; system-language selection and a separate per-user preference applied on the next launch without disturbing drafts.
 
 ### Changed
 
@@ -17,6 +19,7 @@
 - Layout, window, and keymap changes are prepared and published by one runtime owner at complete no-contact input boundaries, including idle wakeup and multitouch resynchronization.
 - Uninstallation preserves configuration/layout/recovery data by default; deleting that data requires explicit `PURGE` confirmation. Changed launchers and unrelated files are retained.
 - Share one optional Qt renderer between the live floating overlay and the manager's non-executing tool-ring preview; expose preview navigation beside the named-function metadata editor.
+- Address manager/editor/help messages with stable dot-separated semantic keys backed by nested `en_US.json`, `zh_CN.json`, and `zh_TW.json` resources, replacing English-source lookups and the old flat catalogs.
 
 ### Fixed
 
@@ -29,6 +32,7 @@
 - Reject stale prepared layouts and metadata results, report post-commit recovery-write failures without claiming rollback, and prevent concurrent activation/removal from leaving a deleted selection.
 - Preserve external edits and invalid JSON drafts in the manager; avoid accessing destroyed list items after saving a new draft during navigation.
 - Fall back to tool labels for missing or unreadable icons; wrap long labels with explicit overflow ellipses, and align icons and highlighted sectors clockwise from the top for non-quadrant slice counts.
+- Open event-value help, rather than executable display-query help, when F1 is pressed in a numeric relative-event field.
 
 ## 2.5.2 (30.8.2026)
 

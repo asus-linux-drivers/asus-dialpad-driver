@@ -18,17 +18,21 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+from dialpad_help import attach_help, help_button, show_context_help, with_help
+from dialpad_i18n import tr
 from dialpad_layout import dumps_layout, event_names, normalize_document, parse_json
 from dialpad_overlay import BOX_HEIGHT, BOX_WIDTH, OverlayCanvas
 
 DIRECTIONS = ("center", "clockwise", "counterclockwise")
+# Locale keys for the geometry fields. Display sites must pass these values
+# through tr(), so the geometry form in the manager shows the selected language.
 GEOMETRY_LABELS = {
-    "circle_center_x": "Circle center X",
-    "circle_center_y": "Circle center Y",
-    "circle_diameter": "Outer diameter",
-    "center_button_diameter": "Center button diameter",
-    "top_right_icon_width": "Activation region width",
-    "top_right_icon_height": "Activation region height",
+    "circle_center_x": "editor.geometry.circle_center_x",
+    "circle_center_y": "editor.geometry.circle_center_y",
+    "circle_diameter": "editor.geometry.circle_diameter",
+    "center_button_diameter": "editor.geometry.center_button_diameter",
+    "top_right_icon_width": "editor.geometry.top_right_icon_width",
+    "top_right_icon_height": "editor.geometry.top_right_icon_height",
 }
 
 
@@ -78,7 +82,7 @@ class DocumentDraft:
 
     def mark_saved(self, layout, revision):
         if self.raw_pending:
-            raise ValueError("Apply or discard the raw JSON draft before saving")
+            raise ValueError(tr("editor.draft.apply_before_save"))
         self.document = deepcopy(layout.document)
         self.revision = revision
         self.baseline = dumps_layout(layout)
@@ -87,7 +91,7 @@ class DocumentDraft:
 
 def rename_ordered(mapping, old, new):
     if new != old and new in mapping:
-        raise ValueError(f"{new!r} already exists")
+        raise ValueError(tr("editor.rename.already_exists", name=repr(new)))
     return {new if key == old else key: value for key, value in mapping.items()}
 
 
@@ -151,6 +155,7 @@ def command_fields(document):
 
 
 def button(text, name, callback, parent=None):
+    """Build a named push button from display text prepared by the caller."""
     result = QPushButton(text, parent)
     result.setObjectName(name)
     result.clicked.connect(callback)
@@ -165,10 +170,11 @@ class MetadataFields(QWidget):
         self.original = deepcopy(original)
         form = QFormLayout(self)
         self.fields = {}
-        names = [("title", "Display title"), ("icon", "Icon file path or theme name"), ("unit", "Unit")]
+        names = [("title", "editor.metadata.title"), ("icon", "editor.metadata.icon"),
+                 ("unit", "editor.metadata.unit")]
         if command:
-            names.insert(0, ("command", "Shell command"))
-        names.append(("value", "Display-value query"))
+            names.insert(0, ("command", "editor.metadata.command"))
+        names.append(("value", "editor.metadata.value"))
         for key, label in names:
             value = original.get(key, "")
             if key == "value" and not isinstance(value, str):
@@ -176,46 +182,50 @@ class MetadataFields(QWidget):
             edit = QLineEdit(value, self)
             edit.setObjectName("metadata_" + key)
             if key in ("command", "value"):
-                edit.setPlaceholderText("Executed by the driver only, never by this preview")
+                edit.setPlaceholderText(tr("editor.metadata.driver_only_placeholder"))
             elif key == "icon":
-                edit.setPlaceholderText("Path to an SVG file, or an icon-theme name")
+                edit.setPlaceholderText(tr("editor.metadata.icon_placeholder"))
             self.fields[key] = edit
-            form.addRow(label, edit)
+            form.addRow(tr(label), with_help(edit, key, self))
             if key == "icon":
-                hint = QLabel("Missing or unreadable icons fall back to the label.", self)
+                hint = QLabel(tr("editor.metadata.icon_hint"), self)
                 hint.setObjectName("iconInputHint")
                 hint.setWordWrap(True)
+                attach_help(hint, "icon")
                 form.addRow("", hint)
         self.fields["value"].setEnabled(not relative)
         if relative:
-            self.fields["value"].setToolTip("Relative events use numeric values, not a display query")
+            self.fields["value"].setToolTip(tr("editor.metadata.relative_value_tooltip"))
         threshold_row = QHBoxLayout()
-        self.threshold_enabled = QCheckBox("Override", self)
+        self.threshold_enabled = QCheckBox(tr("editor.metadata.override"), self)
         self.threshold_enabled.setObjectName("thresholdEnabled")
+        attach_help(self.threshold_enabled, "threshold")
         self.threshold_enabled.setChecked("treshold" in original)
         self.threshold = QDoubleSpinBox(self)
         self.threshold.setObjectName("thresholdValue")
         self.threshold.setDecimals(6)
         self.threshold.setRange(0.000001, 1e12)
-        self.threshold.setSuffix(" degrees")
+        self.threshold.setSuffix(tr("editor.metadata.degrees_suffix"))
         self.threshold.setValue(original.get("treshold", 90))
         self.threshold.setEnabled(self.threshold_enabled.isChecked())
         self.threshold_enabled.toggled.connect(self.threshold.setEnabled)
         threshold_row.addWidget(self.threshold_enabled)
-        threshold_row.addWidget(self.threshold)
-        form.addRow("Rotation threshold (treshold)", threshold_row)
+        threshold_row.addWidget(with_help(self.threshold, "threshold", self))
+        form.addRow(tr("editor.metadata.threshold_row"), threshold_row)
         self.icons = QTableWidget(0, 2, self)
         self.icons.setObjectName("conditionalIcons")
-        self.icons.setHorizontalHeaderLabels(["Query result", "Icon (file path or theme name)"])
+        self.icons.setHorizontalHeaderLabels([tr("editor.metadata.query_result_column"),
+                                              tr("editor.metadata.icon_column")])
         self.icons.horizontalHeader().setStretchLastSection(True)
         self.icons.setMinimumHeight(115)
         self.icons.setMaximumHeight(180)
         for key, value in original.get("icons", {}).items():
             self.add_icon(key, value)
-        form.addRow("Conditional icons", self.icons)
+        form.addRow(tr("editor.metadata.conditional_icons"), with_help(self.icons, "conditional_icons", self))
         controls = QHBoxLayout()
-        controls.addWidget(button("Add icon", "addConditionalIcon", lambda: self.add_icon("", "")))
-        controls.addWidget(button("Remove icon", "removeConditionalIcon", self.remove_icon))
+        controls.addWidget(button(tr("editor.metadata.add_icon"), "addConditionalIcon",
+                                  lambda: self.add_icon("", "")))
+        controls.addWidget(button(tr("editor.metadata.remove_icon"), "removeConditionalIcon", self.remove_icon))
         controls.addStretch()
         form.addRow(controls)
         self._initial_text = {key: edit.text() for key, edit in self.fields.items()}
@@ -251,7 +261,7 @@ class MetadataFields(QWidget):
         pairs = self.icon_pairs()
         if pairs != self._initial_icons:
             if len({key for key, _ in pairs}) != len(pairs):
-                raise ValueError("Conditional icon query results must be unique")
+                raise ValueError(tr("editor.metadata.error.unique_icons"))
             result["icons"] = dict(pairs)
         return result
 
@@ -260,26 +270,34 @@ class FunctionDialog(QDialog):
     def __init__(self, name, original, parent=None):
         super().__init__(parent)
         self.setObjectName("functionDialog")
-        self.setWindowTitle(f"Tool-ring function metadata — {name}")
+        self.setWindowTitle(tr("editor.function.title", name=name))
         self.resize(650, 480)
         self.original = deepcopy(original)
         self.result_value = None
         layout = QVBoxLayout(self)
         self.metadata = MetadataFields(original, self, command=True)
         layout.addWidget(self.metadata)
-        note = QLabel("The display title and icon are what the tool-ring slice shows. A command-only function is valid. Rotation bindings are optional.")
+        note = QLabel(tr("editor.function.note"))
         note.setWordWrap(True)
         layout.addWidget(note)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        buttons.addButton(help_button("functions", self), QDialogButtonBox.ButtonRole.HelpRole)
         layout.addWidget(buttons)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_F1:
+            show_context_help(self, "functions")
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def accept(self):
         try:
             self.result_value = self.metadata.patch(deepcopy(self.original))
         except ValueError as exc:
-            QMessageBox.warning(self, "Invalid metadata", str(exc))
+            QMessageBox.warning(self, tr("editor.function.invalid_metadata"), str(exc))
             return
         super().accept()
 
@@ -290,7 +308,8 @@ class ActionDialog(QDialog):
     def __init__(self, original=None, parent=None):
         super().__init__(parent)
         self.setObjectName("actionDialog")
-        self.setWindowTitle("Edit shortcut action" if original is not None else "Add shortcut action")
+        self.setWindowTitle(tr("editor.action.edit_title") if original is not None
+                            else tr("editor.action.add_title"))
         self.resize(760, 790)
         self.original = deepcopy(original or {})
         self.result_value = None
@@ -302,8 +321,10 @@ class ActionDialog(QDialog):
         form = QFormLayout()
         self.kind = QComboBox(self)
         self.kind.setObjectName("actionKind")
-        for title, kind in [("Keyboard combination", "keys"), ("Relative-axis events", "relative"),
-                            ("Shell command", "command"), ("Control / selection only", "control")]:
+        for title, kind in [(tr("editor.action.kind.keys"), "keys"),
+                            (tr("editor.action.kind.relative"), "relative"),
+                            (tr("editor.action.kind.command"), "command"),
+                            (tr("editor.action.kind.control"), "control")]:
             self.kind.addItem(title, kind)
         keys = self.original.get("key", [])
         if isinstance(keys, str):
@@ -311,7 +332,7 @@ class ActionDialog(QDialog):
         current_kind = ("relative" if keys and keys[0].startswith("REL_") else "keys") if keys else (
             "command" if "command" in self.original else "control")
         self.kind.setCurrentIndex(self.kind.findData(current_kind))
-        form.addRow("Action type", self.kind)
+        form.addRow(tr("editor.action.type_label"), with_help(self.kind, "action_type", self))
         self.modifier = QComboBox(self)
         self.modifier.setObjectName("actionModifier")
         self.modifier.setEditable(True)
@@ -319,48 +340,52 @@ class ActionDialog(QDialog):
         self.modifier.addItems([name for name in event_names() if name.startswith("KEY_")])
         self.modifier.setCurrentText(self.original.get("modifier", ""))
         self.modifier.completer().setFilterMode(Qt.MatchFlag.MatchContains)
-        form.addRow("Required modifier (optional)", self.modifier)
+        form.addRow(tr("editor.action.modifier_label"), with_help(self.modifier, "modifier", self))
         self.trigger = QComboBox(self)
         self.trigger.setObjectName("actionTrigger")
-        self.trigger.addItems(["release", "immediate"])
-        self.trigger.setCurrentText(self.original.get("trigger", "release"))
-        form.addRow("Trigger", self.trigger)
+        # Display labels use explicit keys; the stored layout value stays canonical.
+        self.trigger.addItem(tr("editor.action.trigger.release"), "release")
+        self.trigger.addItem(tr("editor.action.trigger.immediate"), "immediate")
+        self.trigger.setCurrentIndex(max(0, self.trigger.findData(self.original.get("trigger", "release"))))
+        form.addRow(tr("editor.action.trigger_label"), with_help(self.trigger, "trigger", self))
         self.duration = QDoubleSpinBox(self)
         self.duration.setObjectName("actionDuration")
         self.duration.setRange(0, 1e12)
         self.duration.setDecimals(6)
-        self.duration.setSuffix(" seconds")
+        self.duration.setSuffix(tr("editor.action.duration_suffix"))
         self.duration.setValue(self.original.get("duration", 0))
-        form.addRow("Minimum hold duration", self.duration)
+        form.addRow(tr("editor.action.duration_label"), with_help(self.duration, "duration", self))
         self.command = QLineEdit(self.original.get("command", ""), self)
         self.command.setObjectName("actionCommand")
-        self.command.setPlaceholderText("Optional alongside keys; runs only in the driver")
-        form.addRow("Shell command", self.command)
+        self.command.setPlaceholderText(tr("editor.action.command_placeholder"))
+        form.addRow(tr("editor.action.command_label"), with_help(self.command, "command", self))
         body.addLayout(form)
-        self.event_group = QGroupBox("Output events — ordered combination / numeric relative values", self)
+        self.event_group = QGroupBox(tr("editor.action.events_group"), self)
         event_layout = QHBoxLayout(self.event_group)
         catalog_column = QVBoxLayout()
         self.search = QLineEdit(self)
         self.search.setObjectName("eventSearch")
-        self.search.setPlaceholderText("Search event names, e.g. volume or ctrl")
+        self.search.setPlaceholderText(tr("editor.action.search_placeholder"))
+        attach_help(self.search, "events")
         catalog_column.addWidget(self.search)
         self.catalog = QListWidget(self)
         self.catalog.setObjectName("eventCatalog")
         self.catalog.setMinimumHeight(140)
-        catalog_column.addWidget(self.catalog)
-        catalog_column.addWidget(button("Add selected event", "addEvent", self.add_selected_event))
+        catalog_column.addWidget(with_help(self.catalog, "events", self))
+        catalog_column.addWidget(button(tr("editor.action.add_event"), "addEvent", self.add_selected_event))
         event_layout.addLayout(catalog_column, 1)
         selected_column = QVBoxLayout()
         self.events = QTableWidget(0, 2, self)
         self.events.setObjectName("selectedEvents")
-        self.events.setHorizontalHeaderLabels(["Event", "Numeric value"])
+        self.events.setHorizontalHeaderLabels([tr("editor.action.event_column"),
+                                               tr("editor.action.value_column")])
         self.events.horizontalHeader().setStretchLastSection(True)
         self.events.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        selected_column.addWidget(self.events)
+        selected_column.addWidget(with_help(self.events, "events", self))
         event_controls = QHBoxLayout()
-        event_controls.addWidget(button("Remove", "removeEvent", self.remove_event))
-        event_controls.addWidget(button("Up", "eventUp", lambda: self.move_event(-1)))
-        event_controls.addWidget(button("Down", "eventDown", lambda: self.move_event(1)))
+        event_controls.addWidget(button(tr("editor.action.remove_event"), "removeEvent", self.remove_event))
+        event_controls.addWidget(button(tr("editor.action.event_up"), "eventUp", lambda: self.move_event(-1)))
+        event_controls.addWidget(button(tr("editor.action.event_down"), "eventDown", lambda: self.move_event(1)))
         selected_column.addLayout(event_controls)
         event_layout.addLayout(selected_column, 1)
         body.addWidget(self.event_group)
@@ -369,7 +394,7 @@ class ActionDialog(QDialog):
             value = values[index] if isinstance(values, list) and index < len(values) else 1
             self.add_event(key, value)
         self.metadata = MetadataFields(self.original, self, relative=current_kind == "relative")
-        metadata_box = QGroupBox("Display metadata — static preview never runs queries", self)
+        metadata_box = QGroupBox(tr("editor.action.metadata_group"), self)
         QVBoxLayout(metadata_box).addWidget(self.metadata)
         body.addWidget(metadata_box)
         scroll.setWidget(content)
@@ -382,6 +407,7 @@ class ActionDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        buttons.addButton(help_button("actions", self), QDialogButtonBox.ButtonRole.HelpRole)
         layout.addWidget(buttons)
         self.search.textChanged.connect(self.filter_events)
         self.catalog.itemDoubleClicked.connect(lambda _item: self.add_selected_event())
@@ -413,7 +439,9 @@ class ActionDialog(QDialog):
         self.events.setItem(row, 0, item)
         numeric = QLineEdit(str(value), self.events)
         numeric.setObjectName("relativeEventValue")
-        numeric.setToolTip("Signed integer event value")
+        numeric.setToolTip(tr("editor.action.relative_value_tooltip"))
+        # Signed REL_* values, not shell display queries: point at the events topic.
+        attach_help(numeric, "events")
         self.events.setCellWidget(row, 1, numeric)
         self.events.selectRow(row)
 
@@ -435,7 +463,7 @@ class ActionDialog(QDialog):
         try:
             pairs = self.event_pairs()
         except ValueError:
-            self.error.setText("Relative event values must be signed integers")
+            self.error.setText(tr("editor.action.error.signed_integers"))
             return
         if index < 0 or not 0 <= index + offset < len(pairs):
             return
@@ -453,11 +481,11 @@ class ActionDialog(QDialog):
             if kind in ("keys", "relative"):
                 keys = [key for key, _value in pairs]
                 if not keys:
-                    raise ValueError("Add at least one event, or choose a command/control action")
+                    raise ValueError(tr("editor.action.error.no_events"))
                 if kind == "relative" and any(not key.startswith("REL_") for key in keys):
-                    raise ValueError("Remove keyboard events before using relative-axis mode")
+                    raise ValueError(tr("editor.action.error.remove_keyboard"))
                 if kind == "keys" and any(key.startswith("REL_") for key in keys):
-                    raise ValueError("Remove relative events before using keyboard mode")
+                    raise ValueError(tr("editor.action.error.remove_relative"))
                 if pairs != self._initial_events or kind != self._initial_kind:
                     result["key"] = keys[0] if len(keys) == 1 and not isinstance(self.original.get("key"), list) else keys
                 if kind == "relative":
@@ -476,25 +504,36 @@ class ActionDialog(QDialog):
                 else:
                     result.pop("command", None)
             if kind == "command" and not command and (command_changed or "command" not in self.original):
-                raise ValueError("Enter a shell command, or choose a control-only action")
+                raise ValueError(tr("editor.action.error.command_required"))
             if self.modifier.currentText():
                 result["modifier"] = self.modifier.currentText()
             else:
                 result.pop("modifier", None)
-            if self.trigger.currentText() != self.original.get("trigger", "release"):
-                result["trigger"] = self.trigger.currentText()
+            if self.trigger.currentData() != self.original.get("trigger", "release"):
+                result["trigger"] = self.trigger.currentData()
             if self.duration.value() != self._initial_duration:
                 result["duration"] = self.duration.value()
             self.result_value = self.metadata.patch(result)
-            # Validate in a minimal complete document using the same validator.
-            normalize_document({"schema_version": 1, "geometry": {
-                "circle_center_x": 100, "circle_center_y": 100, "circle_diameter": 100,
-                "center_button_diameter": 40, "top_right_icon_width": 20, "top_right_icon_height": 20,
-            }, "app_shortcuts": {"none": {"center": [self.result_value]}}})
+            # Validate in a minimal complete document using the same validator; its
+            # original message is retained as the appended detail.
+            try:
+                normalize_document({"schema_version": 1, "geometry": {
+                    "circle_center_x": 100, "circle_center_y": 100, "circle_diameter": 100,
+                    "center_button_diameter": 40, "top_right_icon_width": 20, "top_right_icon_height": 20,
+                }, "app_shortcuts": {"none": {"center": [self.result_value]}}})
+            except ValueError as exc:
+                raise ValueError(tr("editor.action.error.invalid", detail=exc)) from exc
         except (ValueError, TypeError) as exc:
             self.error.setText(str(exc))
             return
         super().accept()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_F1:
+            show_context_help(self, "actions")
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class GeometryCanvas(QWidget):
@@ -508,7 +547,8 @@ class GeometryCanvas(QWidget):
         self.device_bounds = None
         self._drag = None
         self._drag_bounds = None
-        self.setToolTip("Drag the circle to move it. Drag square handles to resize the outer circle, center button, or top-right activation region.")
+        self.setToolTip(tr("editor.geometry.canvas_tooltip"))
+        attach_help(self, "geometry")
 
     def set_geometry(self, geometry):
         self.geometry_data = dict(geometry)
@@ -556,7 +596,8 @@ class GeometryCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.fillRect(self.rect(), self.palette().base())
         painter.setPen(self.palette().text().color())
-        label = "Measured device bounds · absolute touchpad coordinates" if self.device_bounds else "Schematic · device bounds unknown · absolute coordinates"
+        label = (tr("editor.geometry.measured_bounds") if self.device_bounds
+                 else tr("editor.geometry.schematic"))
         painter.drawText(QRectF(8, 4, self.width() - 16, 30), Qt.AlignmentFlag.AlignCenter, label)
         if not self.geometry_data:
             return
@@ -571,7 +612,8 @@ class GeometryCanvas(QWidget):
         painter.setBrush(QColor("#e8ad5577"))
         painter.setPen(QPen(QColor("#ad7924"), 2))
         painter.drawRect(activation)
-        painter.drawText(activation, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, "Activation")
+        painter.drawText(activation, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                         tr("editor.geometry.activation_region"))
         center = self.point(g["circle_center_x"], g["circle_center_y"])
         _origin, scale = self.transform()
         painter.setPen(QPen(QColor("#3d78b1"), 2))
@@ -581,7 +623,8 @@ class GeometryCanvas(QWidget):
         painter.setBrush(QColor("#6ca5d699"))
         r = g["center_button_diameter"] * scale / 2
         painter.drawEllipse(center, r, r)
-        painter.drawText(QRectF(center.x() - 60, center.y() - 12, 120, 24), Qt.AlignmentFlag.AlignCenter, "Drag to move")
+        painter.drawText(QRectF(center.x() - 60, center.y() - 12, 120, 24), Qt.AlignmentFlag.AlignCenter,
+                         tr("editor.geometry.drag_to_move"))
         painter.setBrush(QColor("#ffffff"))
         for point in self.handles().values():
             painter.drawRect(QRectF(point.x() - 5, point.y() - 5, 10, 10))
@@ -649,15 +692,20 @@ class RingPreview(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        self.caption = QLabel(f"Tool-ring appearance · live overlay canvas · {BOX_WIDTH}×{BOX_HEIGHT}", self)
+        self.caption = QLabel(tr("editor.preview.caption", width=BOX_WIDTH, height=BOX_HEIGHT), self)
         self.caption.setObjectName("ringPreviewCaption")
         self.caption.setWordWrap(True)
-        layout.addWidget(self.caption)
+        caption_row = QHBoxLayout()
+        caption_row.addWidget(self.caption, 1)
+        caption_row.addWidget(help_button("functions", self))
+        layout.addLayout(caption_row)
         self.canvas = OverlayCanvas(self, background=QColor("#30343b"))
+        attach_help(self.canvas, "functions")
         layout.addWidget(self.canvas, 0, Qt.AlignmentFlag.AlignHCenter)
         self.note = QLabel(self)
         self.note.setObjectName("ringPreviewNote")
         self.note.setWordWrap(True)
+        attach_help(self.note, "functions")
         layout.addWidget(self.note)
         layout.addStretch(1)
         self.set_profile({})
@@ -684,11 +732,8 @@ class RingPreview(QWidget):
             "enabled": True,
         })
         if self.names:
-            order = (f"{len(self.names)} named functions · {slices} slices clockwise from the top · "
-                     f"{padding} empty padding slice(s) from slices_minimum_count = {self.minimum}")
+            order = tr("editor.preview.order_named",
+                       count=len(self.names), slices=slices, padding=padding, minimum=self.minimum)
         else:
-            order = ("Single function / shared controls: no named tool-ring entries, so no slice carries a "
-                     "function label. Named functions in the Application rules & shortcuts tab become the "
-                     "tool-ring entries.")
-        self.note.setText(order + "\nStatic appearance only: commands, display-value queries, and conditional "
-                                  "icon-query results are never run.")
+            order = tr("editor.preview.order_single")
+        self.note.setText(order + "\n" + tr("editor.preview.static_note"))

@@ -1,0 +1,530 @@
+{
+  "common": {
+    "language": {
+      "label": "介面語言",
+      "system": "跟隨系統",
+      "restart_hint": "語言設定將在下次啟動管理器時生效。",
+      "save_failed": "無法儲存語言設定",
+      "saved_hint": "語言設定已儲存。重新啟動管理器後生效；目前草稿保持不變。",
+      "names": {
+        "en_us": "English",
+        "zh_cn": "简体中文",
+        "zh_tw": "繁體中文"
+      }
+    }
+  },
+  "help": {
+    "window": {
+      "title": "DialPad 管理器說明",
+      "search_placeholder": "搜尋說明主題與內容",
+      "search_accessible": "搜尋說明",
+      "content_accessible": "說明內容",
+      "no_results": "沒有符合的說明主題",
+      "shortcut_hint": "按 F1 查看說明。",
+      "topic_accessible": "說明：{topic}",
+      "open": "說明 (F1)",
+      "action": "說明"
+    },
+    "topics": {
+      "overview": {
+        "title": "快速入門",
+        "body": "複製一個內建預設，編輯使用者副本，驗證並儲存。只有希望執行中的驅動程式使用該配置時，才啟用已儲存的修訂。\n\n具名函式就是工具環項目。不使用具名工具環時，也可以直接設定中央按鈕和旋轉動作。幾何參數描述觸控板座標，不是浮動視窗大小。\n\n編輯、預覽和本說明均不會執行配置命令。啟用配置可能使驅動程式執行命令和數值查詢。啟用匯入的預設前，請先檢閱其內容。"
+      },
+      "library": {
+        "title": "預設庫與檔案操作",
+        "body": "內建預設受到保護：使用「複製」建立可編輯的使用者預設。「新增」建立草稿；「匯入」載入經檢閱的 JSON 或可靜態解析的 Python 配置；「匯出」寫出可攜的 JSON 副本。「重新整理」重新讀取預設庫。\n\n重新命名或刪除正在使用的預設前，必須由同一驅動程式實例確認替代修訂已套用。在此之前，原檔案會保留。取消待處理操作會保留原檔案，但不會撤銷已經寫入設定的替代配置請求。"
+      },
+      "identity": {
+        "title": "識別碼與顯示名稱",
+        "body": "預設識別碼用於選取檔案，必須符合 [A-Za-z0-9][A-Za-z0-9_-]*，不能是路徑。選填的顯示名稱僅是標籤，不會改變檔案選取。\n\n函式識別碼與顯示標題也相互獨立。「重新命名」變更函式識別碼及其參照；「顯示標題」只改變呈現給使用者的標籤。切換介面語言不會翻譯已儲存的名稱、命令或路徑。"
+      },
+      "state": {
+        "title": "草稿、已儲存、已請求、已套用與復原狀態",
+        "body": "草稿是記憶體中的編輯內容；已儲存對應檔案修訂；已請求對應設定中選取的配置；已套用表示執行中的驅動程式已確認使用該修訂。儲存成功或送出啟用請求，並不證明驅動程式已經套用。\n\n熱重載等待完整的無觸點邊界。按住期間的手勢會使用原快照完成。只有已套用的修訂完成持久化後，復原記錄才是最新狀態。離線狀態無法確認啟用。"
+      },
+      "rules": {
+        "title": "應用程式比對與規則順序",
+        "body": "應用程式規則鍵先比對執行檔路徑，再比對視窗標題，按儲存順序進行小寫子字串比對。合成器的 class/app_id 不是獨立的比對欄位。\n\n保留規則 none 是後備項目。比對到明確為空的規則時，會刻意停用該應用程式的綁定。「上移/下移」改變優先順序；更具體的比對應位於廣泛比對之前。"
+      },
+      "functions": {
+        "title": "具名函式與工具環",
+        "body": "具名函式按儲存順序成為工具環項目，從頂部順時針排列。在這裡新增、重新命名、刪除或調整順序；在中繼資料對話框中編輯標題、圖示和命令。\n\ncenter、clockwise、counterclockwise 是保留的動作區域，不是函式名稱。切換編輯檢視不會刪除直接動作或具名函式。\n\n預覽使用即時浮動視窗的繪製元件，顯示靜態基礎圖示並按 slices_minimum_count 補齊扇區。它不執行命令或查詢、不猜測條件圖示，也不模擬即時手勢值。預覽的中性背景與桌面透明浮動視窗不同。"
+      },
+      "actions": {
+        "title": "動作與候選項目順序",
+        "body": "選取 center、clockwise 或 counterclockwise，然後新增或編輯動作。候選動作保留原有順序，但帶修飾鍵條件的候選項目優先於無修飾鍵候選項目。\n\n動作可以送出按鍵、相對軸事件、執行 Shell 命令，或者僅控制選取。函式可以只有命令，不必新增佔位按鍵。刪除動作只影響選取的候選項目。"
+      },
+      "action_type": {
+        "title": "選擇動作類型",
+        "body": "「鍵盤組合」送出選定順序的按鍵/按鈕事件。「相對軸事件」送出 REL_WHEEL 等事件的帶正負號數值。「Shell 命令」由驅動程式執行命令。「僅控制/選取」不輸出按鍵，也不執行 Shell。\n\n變更類型不會自動捨棄不相容的事件列。確認前請檢閱；驗證會回報不相容組合。鍵盤動作也可以附帶命令。"
+      },
+      "events": {
+        "title": "事件名稱、組合與相對數值",
+        "body": "按事件名稱搜尋目錄，例如 volume 或 ctrl。新增選取的事件，並按目標組合調整順序。KEY_LEFTCTRL、REL_WHEEL 等事件識別碼保持原樣儲存。\n\n相對數值是帶正負號的整數，不是百分比，也不是顯示數值查詢。組合 REL_WHEEL 與 REL_WHEEL_HI_RES 時，需要分別指定各事件的數值。刪除或調整列順序會保留其餘事件與數值的對應關係。"
+      },
+      "modifier": {
+        "title": "所需修飾鍵",
+        "body": "KEY_LEFTSHIFT 等選填修飾鍵使該候選動作僅在此鍵按住時可用。它是條件，不是另一個要輸出的按鍵。\n\n留空表示無修飾鍵候選項目。帶修飾鍵的候選項目優先。請使用目錄中的確切事件名稱；介面不會翻譯它，也不會推斷鍵盤語言字元。"
+      },
+      "trigger": {
+        "title": "動作觸發時機",
+        "body": "release 表示滿足條件後在手勢放開時執行。immediate 表示手勢條件滿足後立即執行，不等待放開。\n\n選擇器可能顯示翻譯後的標籤，但儲存值仍是 release 和 immediate。旋轉門檻與最短按住時間在適用時仍然有效。"
+      },
+      "duration": {
+        "title": "最短按住時長",
+        "body": "時長是動作可用前手勢必須滿足的非負秒數，不是在快捷鍵之後插入的延遲。\n\n零表示沒有額外的按住時間要求。選擇手勢時序時，請一併考慮觸發時機和旋轉門檻。"
+      },
+      "command": {
+        "title": "Shell 命令與信任",
+        "body": "這是可執行的 Shell 文字，不是標籤。當動作或具名函式被觸發時，驅動程式以目前使用者身分執行它。鍵盤動作也可以附帶命令。\n\n編輯器與說明不會執行命令。不要僅為預覽配置而啟用不可信的匯入命令；啟用還可能啟動顯示查詢。"
+      },
+      "title": {
+        "title": "顯示標題",
+        "body": "顯示標題用於標註函式或動作，不會重新命名其識別碼，也不改變輸出。具名函式沒有設定標題時，通常使用函式識別碼作為後備。\n\n過長的工具標籤會換行，然後使用省略號。畫布工具提示中可以查看完整標題。使用者撰寫的標題不會隨介面語言翻譯。"
+      },
+      "icon": {
+        "title": "圖示檔案或佈景主題名稱",
+        "body": "使用本機影像路徑（例如 SVG）或已安裝的圖示佈景主題名稱。使用檔案時建議採用絕對路徑；相對路徑取決於程序的工作目錄。\n\n圖示遺失或無法讀取時，會改為顯示標題。匯入/匯出不會複製圖示資源，其他桌面的絕對圖示路徑可能在本機不存在。預覽只在本機解析基礎圖示，不執行查詢。"
+      },
+      "unit": {
+        "title": "顯示單位",
+        "body": "單位是附加到顯示值後的文字，例如 % 或 dB。它不會轉換數值，也不會改變輸出的相對事件。\n\n靜態預覽不執行顯示數值查詢，因此不會編造一個數值來展示單位。"
+      },
+      "value": {
+        "title": "顯示值查詢",
+        "body": "顯示數值查詢是 Shell 文字，驅動程式讀取其輸出作為回饋。它可能在啟用或中繼資料更新時執行，並非只有輸出動作之後才執行。請將它視為可執行程式碼檢閱。\n\n靜態編輯和預覽從不執行查詢。相對軸動作使用的是數值型事件值；為避免混淆 value 的兩種含義，其顯示查詢欄位會停用。"
+      },
+      "threshold": {
+        "title": "旋轉閾值 (treshold)",
+        "body": "啟用「覆寫」後，可為此項目設定以度為單位的正旋轉門檻。未覆寫時，使用現有驅動程式/預設門檻。\n\n歷史設定拼寫 treshold 是刻意保留的，儲存配置時不會變更。這是手勢門檻，不是繪製工具環的直徑。"
+      },
+      "conditional_icons": {
+        "title": "條件圖示對應",
+        "body": "將確切的顯示查詢結果對應到圖示檔案或佈景主題名稱。查詢結果鍵必須唯一。這些鍵是結果字串，本身不是 Shell 命令。\n\n只有驅動程式會執行查詢並選擇條件圖示。靜態預覽顯示基礎圖示或後備文字，不猜測查詢結果。刪除一列只移除該結果對應。"
+      },
+      "geometry": {
+        "title": "觸控板幾何參數",
+        "body": "座標與直徑使用觸控板絕對單位，不是螢幕像素。驅動程式回報的裝置邊界可用於驗證；缺少裝置邊界時，畫布只是示意圖，不是校準結果。\n\n拖曳圓內區域移動圓，拖曳方形控制點調整外圓、中央按鈕或右上角啟用區域大小。啟用區域始終固定在右上角。這些控制項不會調整浮動視窗大小。"
+      },
+      "raw_json": {
+        "title": "原始 JSON 草稿",
+        "body": "原始 JSON 是獨立草稿。「將 JSON 套用至表單」先驗證，再取代結構化值；無效文字會保留。「捨棄原始草稿」還原最近有效的表單表示。\n\n存在未套用的原始草稿時，會禁止結構化編輯，以免覆蓋草稿。儲存不能悄悄忽略無效 JSON。JSON 欄位與事件識別碼不會隨介面翻譯改變。"
+      },
+      "save_activate": {
+        "title": "儲存、重新載入與啟用",
+        "body": "「驗證」檢查目前文件但不執行它。「儲存」寫入預設，不改變選取的配置識別碼；儲存正在使用的檔案會請求安全熱重載。「啟用已儲存的修訂」請求使用確切的已儲存修訂，並等待執行階段確認。\n\n「重新載入檔案」只有經確認後才捨棄本機編輯。外部修改不會被悄悄覆蓋：請載入外部檔案，或另存為副本。關閉管理器不會停止驅動程式。"
+      },
+      "trust": {
+        "title": "受信任的 Python 轉換",
+        "body": "一般 Python 配置匯入使用靜態解析，不執行檔案。不支援的動態 Python 會被拒絕，而不是猜測轉換。\n\n「信任 Python 並轉換」是明確的執行邊界：它以你的使用者身分執行已檢閱的 Python。編輯器無法回復其副作用。這項許可並不授權驅動程式執行其他動態 Python 配置，離線轉換也不提供該執行路徑。"
+      },
+      "language": {
+        "title": "介面語言",
+        "body": "跟隨系統時，一般中文地區使用簡體中文；zh_TW、zh_HK、zh_MO 或 Hant 使用繁體中文；其他語言使用 English。也可以明確選擇任一受支援的介面語言。\n\n設定儲存在目前使用者的管理器設定中，不在 dialpad_dev 或預設裡。它在下次啟動管理器時生效；變更設定不會重建已開啟的視窗或捨棄草稿。使用者資料、命令文字、路徑和底層錯誤詳細內容均保留原文。"
+      },
+      "troubleshooting": {
+        "title": "疑難排解與驗證範圍",
+        "body": "如果編輯控制項無法使用，請檢查預設是否為內建/唯讀、是否有未套用的原始草稿，或是否存在待處理的重新命名/刪除。編輯內建預設前請先複製。離線模式可編輯，但無法啟用或確認執行中的修訂。\n\n已儲存/已請求的修訂不代表已套用確認。啟用待處理或遭拒絕時，請檢查實例/修訂狀態和驅動程式日誌。遺失圖示可能屬於本機未安裝的桌面佈景主題。\n\n真實登入啟動、睡眠恢復、Nix 建置、其他桌面工作階段/平台、繪製變更後的實體工具選取，以及即時數值/條件圖示回饋，均需單獨驗收。證據與未完成清單見 docs/issue-31-layout-manager-plan.md。"
+      }
+    }
+  },
+  "editor": {
+    "draft": {
+      "apply_before_save": "請先套用或捨棄原始 JSON 草稿，然後再儲存"
+    },
+    "rename": {
+      "already_exists": "{name} 已存在"
+    },
+    "metadata": {
+      "title": "顯示標題",
+      "icon": "圖示檔案路徑或主題名稱",
+      "unit": "單位",
+      "command": "Shell 命令",
+      "value": "顯示值查詢",
+      "driver_only_placeholder": "僅由驅動程式執行，此預覽從不執行",
+      "icon_placeholder": "SVG 檔案路徑，或圖示主題名稱",
+      "icon_hint": "圖示缺失或無法讀取時，將退回為標籤文字。",
+      "relative_value_tooltip": "相對事件使用數值，而不是顯示查詢",
+      "override": "覆寫",
+      "degrees_suffix": " 度",
+      "threshold_row": "旋轉閾值 (treshold)",
+      "query_result_column": "查詢結果",
+      "icon_column": "圖示（檔案路徑或主題名稱）",
+      "conditional_icons": "條件圖示",
+      "add_icon": "新增圖示",
+      "remove_icon": "移除圖示",
+      "error": {
+        "unique_icons": "條件圖示的查詢結果必須唯一"
+      }
+    },
+    "function": {
+      "title": "工具環函式中繼資料 — {name}",
+      "note": "顯示標題和圖示就是工具環扇區所顯示的內容。僅包含命令的函式同樣有效。旋轉繫結是選用的。",
+      "invalid_metadata": "中繼資料無效"
+    },
+    "action": {
+      "edit_title": "編輯快捷動作",
+      "add_title": "新增快捷動作",
+      "kind": {
+        "keys": "鍵盤組合",
+        "relative": "相對軸事件",
+        "command": "Shell 命令",
+        "control": "僅控制 / 選擇"
+      },
+      "type_label": "動作類型",
+      "modifier_label": "所需修飾鍵（選用）",
+      "trigger": {
+        "release": "手勢放開時",
+        "immediate": "相符後立即"
+      },
+      "trigger_label": "觸發方式",
+      "duration_label": "最短按住時長",
+      "duration_suffix": " 秒",
+      "command_label": "Shell 命令",
+      "command_placeholder": "可與按鍵組合並存；僅在驅動程式內執行",
+      "events_group": "輸出事件 — 有序組合 / 數值型相對值",
+      "search_placeholder": "搜尋事件名稱，例如 volume 或 ctrl",
+      "add_event": "新增所選事件",
+      "event_column": "事件",
+      "value_column": "數值",
+      "remove_event": "移除",
+      "event_up": "上移",
+      "event_down": "下移",
+      "metadata_group": "顯示中繼資料 — 靜態預覽從不執行查詢",
+      "relative_value_tooltip": "帶正負號的整數事件值",
+      "error": {
+        "signed_integers": "相對事件值必須是帶正負號的整數",
+        "no_events": "請至少新增一個事件，或選擇命令／僅控制動作",
+        "remove_keyboard": "使用相對軸模式前請先移除鍵盤事件",
+        "remove_relative": "使用鍵盤模式前請先移除相對事件",
+        "command_required": "請輸入 Shell 命令，或選擇僅控制動作",
+        "invalid": "動作無效：{detail}"
+      }
+    },
+    "geometry": {
+      "circle_center_x": "圓心 X",
+      "circle_center_y": "圓心 Y",
+      "circle_diameter": "外圓直徑",
+      "center_button_diameter": "中心按鈕直徑",
+      "top_right_icon_width": "啟用區域寬度",
+      "top_right_icon_height": "啟用區域高度",
+      "canvas_tooltip": "拖曳圓形可移動位置。拖曳方形控點可調整外圓、中心按鈕或右上角啟用區域的大小。",
+      "measured_bounds": "實測裝置範圍 · 絕對觸控板座標",
+      "schematic": "示意圖 · 裝置範圍未知 · 絕對座標",
+      "activation_region": "啟用區域",
+      "drag_to_move": "拖曳以移動"
+    },
+    "preview": {
+      "caption": "工具環外觀 · 即時覆蓋畫布 · {width}×{height}",
+      "order_named": "{count} 個具名函式 · 從頂端起順時針 {slices} 個扇區 · 由 slices_minimum_count = {minimum} 得到 {padding} 個空白補位扇區",
+      "order_single": "單一函式 / 共用控制項：沒有具名工具環項目，因此沒有扇區帶有函式標籤。在「應用程式規則與快捷鍵」分頁中命名的函式會成為工具環項目。",
+      "static_note": "僅為靜態外觀：命令、顯示值查詢和條件圖示查詢結果都不會被執行。"
+    }
+  },
+  "manager": {
+    "window": {
+      "title": "DialPad 配置管理器"
+    },
+    "runtime": {
+      "offline": "離線編輯 —— 無法啟用",
+      "disabled": "Linux 執行階段整合已停用；仍可進行離線編輯",
+      "unavailable": "驅動程式無法使用 —— 僅限離線編輯（{error}）"
+    },
+    "state": {
+      "config_path": "設定目錄：{path}",
+      "source_bundled": "內建預設 · 唯讀 —— 用「複製」來編輯",
+      "source_user": "使用者預設",
+      "overrides_inline": "\n覆寫：{paths}",
+      "source_descriptor": "{identifier} · {provenance} · {format}\n{path}",
+      "new_draft": "新的使用者草稿 · 尚未儲存檔案 · 儲存時選擇識別碼",
+      "unapplied_raw": "未套用的原始草稿",
+      "unsaved": "未儲存的草稿",
+      "saved": "已儲存，未變更",
+      "no_document": "沒有可編輯的文件",
+      "running": "已儲存的修訂版本正在執行",
+      "not_running": "無法確認已儲存的修訂版本正在執行",
+      "running_with_draft": "{running}；草稿尚未執行",
+      "summary": "{state} · 已儲存的修訂版本：{revision}\n{running}",
+      "revision_tooltip": "已儲存的來源修訂版本：{revision}\n已套用的修訂版本：{applied}",
+      "pending_rename": "正在等待 {replacement} @ {revision} 套用後再重新命名。在取得精確確認之前會保留原始檔案。",
+      "pending_deletion": "正在等待 {replacement} @ {revision} 套用後再刪除。在取得精確確認之前會保留原始檔案。",
+      "acknowledged": "驅動程式已確認 {identifier} @ {revision}。",
+      "applied": "驅動程式已套用 {identifier} @ {revision}。",
+      "requested": "管理員已要求 {identifier} @ {revision}；尚未取得同一個驅動程式執行個體的確認。",
+      "config_error": "設定錯誤：{error}",
+      "config_request": "已設定的要求：{identifier}",
+      "config_default": "已設定的要求：無覆寫（使用驅動程式的 argv 預設值）",
+      "identity": "{identifier} @ {revision}",
+      "driver_summary": "{config} · 驅動程式：{state}\n要求：{requested} · 已套用：{running} · 代次 {generation}",
+      "recovery_warning": "\n復原不是最新的：{detail}",
+      "recovery_detail": "持久性未確認",
+      "instance_tooltip": "執行個體：{instance}\n要求的修訂版本：{requested}\n已套用的修訂版本：{applied}",
+      "offline_summary": "{config} · {error}",
+      "instance_changed_title": "執行階段執行個體已變更",
+      "instance_changed_body": "待處理的檔案操作已取消。原始檔案已被保留。重試前請先檢視新的執行個體。",
+      "replacement_rejected_title": "替代項目已被拒絕",
+      "replacement_rejected_body": "未移除任何檔案。正在執行的版面配置被保留；在重新命名/刪除之前，請先選擇有效的替代項目。",
+      "driver": {
+        "pending": "等待中",
+        "applied": "已套用",
+        "rejected": "已拒絕",
+        "recovered": "已復原",
+        "requested": "已要求",
+        "unknown": "未知"
+      }
+    },
+    "library": {
+      "title": "快捷鍵預設",
+      "filter_placeholder": "篩選識別碼 / 來源",
+      "buttons": {
+        "new": "新增",
+        "copy": "複製…",
+        "import": "匯入…",
+        "export": "匯出…",
+        "rename": "重新命名…",
+        "delete": "刪除…",
+        "refresh": "重新整理預設庫"
+      },
+      "select_placeholder": "選擇一個版面配置，或新增一個預設。",
+      "discover_failed": "無法探索版面配置",
+      "item": {
+        "bundled": "{identifier}\n內建 · 唯讀 · {format}",
+        "user": "{identifier}\n使用者 · {format}",
+        "overrides_suffix": " · 覆寫 {count} 項",
+        "tooltip_overrides": "\n覆寫：\n{paths}"
+      },
+      "name_required": "名稱不能為空"
+    },
+    "identity": {
+      "display_name_placeholder": "選用的顯示名稱；絕不是檔案路徑",
+      "display_name": "顯示名稱"
+    },
+    "actions": {
+      "cancel_pending": "取消待處理的重新命名 / 刪除",
+      "trust_convert": "信任 Python 並轉換…",
+      "reload_file": "重新載入檔案",
+      "validate": "驗證",
+      "save": "儲存",
+      "activate": "啟用已儲存的修訂版本",
+      "buttons": {
+        "add": "新增動作…",
+        "edit": "編輯…",
+        "remove": "移除",
+        "up": "上移",
+        "down": "下移"
+      },
+      "precedence_note": "含修飾鍵的替代動作優先；在每個優先順序群組內保留原有順序。",
+      "save_active": "儲存並要求重新載入",
+      "save_tooltip": "儲存使用中的檔案會要求執行階段重新載入。儲存絕不會變更所選版面配置的識別碼。",
+      "item": {
+        "key_command": "{keys} + shell 命令",
+        "command": "命令：{command}",
+        "control": "控制 / 選取",
+        "value_suffix": "{description} = {values}",
+        "modifier_prefix": "[{modifier}] {description}",
+        "titled": "{index}. {title} · {description}",
+        "plain": "{index}. {description}",
+        "hold": "\n{trigger} · 按住 {duration} 秒"
+      },
+      "triggers": {
+        "release": "放開",
+        "immediate": "立即"
+      }
+    },
+    "status": {
+      "static_note": "靜態編輯與預覽不會執行版面配置命令"
+    },
+    "rules": {
+      "note": "規則按其儲存順序依次測試。‘none’ 是後備項；空規則刻意不含任何綁定。",
+      "buttons": {
+        "add": "新增",
+        "rename": "重新命名",
+        "remove": "移除",
+        "move_up": "上移",
+        "move_down": "下移"
+      },
+      "mode": {
+        "single": "單一功能 / 共用控制項",
+        "multifunction": "多功能 / 具名功能"
+      },
+      "tab": "應用程式規則與快速鍵",
+      "mapping": {
+        "none_selected": "請選擇一個應用程式規則。",
+        "empty": "空對應：沒有綁定，也沒有工具環項目。請新增直接動作或具名功能。",
+        "combined": "直接控制項與具名功能組合（即工具環項目）",
+        "multifunction": "多功能對應：具名功能即工具環項目，依此儲存順序排列",
+        "single": "單一功能對應：沒有具名工具環項目，因此環上沒有帶標籤的扇區",
+        "suffix": "{description}。切換編輯器檢視絕不會刪除任一組綁定。"
+      },
+      "add_title": "新增應用程式規則",
+      "name_label": "應用程式執行檔 / 比對規則：",
+      "duplicate_title": "規則重複",
+      "duplicate_body": "該應用程式規則已存在",
+      "fallback_title": "後備規則",
+      "fallback_rename_body": "必需的 ‘none’ 後備項不能重新命名",
+      "rename_title": "重新命名規則",
+      "fallback_remove_body": "必需的 ‘none’ 後備項不能移除；其綁定可以為空",
+      "remove_title": "移除應用程式規則",
+      "remove_body": "移除 {name} 及其所有綁定？"
+    },
+    "functions": {
+      "title": "具名功能 · 工具環項目 · 儲存順序從頂部順時針排列",
+      "buttons": {
+        "add": "新增功能",
+        "rename": "重新命名",
+        "remove": "移除",
+        "up": "上移",
+        "down": "下移"
+      },
+      "metadata": "命令 / 顯示中繼資料…",
+      "preview_ring": "預覽工具環",
+      "preview_ring_tooltip": "在「幾何與靜態預覽」分頁中顯示工具環的靜態外觀。不會執行命令與取值查詢。",
+      "preview_status": "工具環預覽使用與實際覆蓋層相同的畫布；不會執行命令與取值查詢。",
+      "add_title": "新增具名功能",
+      "add_label": "功能識別（順序決定其在環上的扇區）：",
+      "invalid_name_title": "功能名稱無效",
+      "name_conflict_body": "該名稱已存在，或保留給直接綁定",
+      "rename_title": "重新命名功能",
+      "rename_label": "功能識別：",
+      "reserved_title": "保留名稱",
+      "reserved_body": "方向名稱不能做為功能識別",
+      "duplicate_title": "功能重複",
+      "remove_title": "移除具名功能",
+      "remove_body": "移除 {name} 及其動作？",
+      "invalid_metadata_title": "功能中繼資料無效"
+    },
+    "directions": {
+      "center": "中央按鈕",
+      "clockwise": "順時針旋轉",
+      "counterclockwise": "逆時針旋轉"
+    },
+    "geometry": {
+      "template": "硬體範本 · 觸控板絕對座標",
+      "instructions": "拖曳圓形內部可移動圓。方形控點可調整外圓、中央按鈕與啟用區域的大小。啟用區域一律錨定在右上角。\n\n裝置資訊可用時會驗證範本；示意圖並非校準。覆蓋層外觀與觸控板幾何無關。",
+      "tab": "幾何與靜態預覽"
+    },
+    "raw": {
+      "note": "在「套用」成功之前，原始文字變更始終是獨立的草稿。無效的 JSON 絕不會取代表單或已儲存檔案。",
+      "apply": "將有效 JSON 套用到表單",
+      "discard": "捨棄原始變更",
+      "tab": "原始 JSON",
+      "pending_note": "有未套用的原始草稿。在進行結構化編輯 / 儲存之前，請先套用有效的 JSON 或捨棄原始變更。",
+      "invalid_body": "原始草稿無效，已保留：\n{error}",
+      "discard_title": "捨棄原始 JSON 草稿",
+      "discard_body": "捨棄未套用的原始文字並還原上一次有效的表單？",
+      "apply_title": "未套用的原始 JSON",
+      "apply_body": "是否先套用原始 JSON 草稿再繼續？無效文字將維持不變。"
+    },
+    "validation": {
+      "open_failed": "無法開啟選取的來源。未以優先順序較低的檔案替代。\n{error}\nPython 程式碼未被執行。",
+      "valid_layout": "版面配置有效 · 命令與取值查詢尚未執行",
+      "valid_raw": "原始草稿有效（未套用到表單）",
+      "valid_layout_plain": "版面配置有效 · 未執行任何命令",
+      "imported": "已從 {path} 靜態匯入。原始檔案未變更。{count} 個命令/查詢欄位未被執行；啟用前請檢視其可信任度。",
+      "trusted_converted": "已為轉換執行受信任的 Python。啟用前請另存為獨立的 JSON 副本；原始來源未變更。"
+    },
+    "common": {
+      "none": "無"
+    },
+    "operations": {
+      "guard": {
+        "pending_title": "有檔案操作待處理",
+        "pending_body": "請等待確認，或先取消待處理的重新命名/刪除。原始檔案仍被保留。",
+        "draft_title": "未儲存的版面配置草稿",
+        "draft_body": "離開此草稿前是否儲存變更？選擇「捨棄」也會丟棄未套用的原始文字。"
+      },
+      "copy": {
+        "title": "儲存使用者副本",
+        "label": "新識別碼（字母、數字、底線、連字號）：",
+        "identifier_exists": "該識別碼已安裝。請選擇不同的識別碼；「複製」不會覆寫現有預設。",
+        "destination_exists": "目的地已存在",
+        "failed_title": "無法建立副本",
+        "invalid_title": "版面配置無效",
+        "copy_failed_title": "複製失敗",
+        "saved_status": "使用者副本已儲存，尚未啟用。"
+      },
+      "save": {
+        "external_change": "選取的檔案已被外部變更。請重新載入，或將草稿另存為新副本。",
+        "read_only_title": "內建預設為唯讀",
+        "read_only_body": "請使用「複製」建立獨立的使用者預設",
+        "confirm_title": "儲存可能要求即時重新載入",
+        "confirm_body": "儲存會變更被監視的預設檔案。若驅動程式正在使用它，這會要求重新載入；只有在取得確認後，正在執行的修訂版本才會改變。沒有即時狀態時，無法確認目前的執行階段選擇。是否繼續？",
+        "failed_title": "儲存失敗 —— 草稿已保留",
+        "saved_status": "已以原子方式儲存。關於實際套用的修訂版本，請查看執行階段狀態。"
+      },
+      "rename": {
+        "conflict_title": "外部修訂版本衝突",
+        "reload_button": "重新載入外部檔案",
+        "copy_button": "另存為新副本…",
+        "discard_title": "捨棄本機變更",
+        "discard_body": "重新載入會捨棄此本機草稿。是否繼續？",
+        "failed_title": "重新命名未完成",
+        "failed_body": "{error}\n失敗時原始檔案會被保留。為避免資料遺失，任何新儲存的副本都會保留。",
+        "source_changed": "原始版面配置來源在移除之前發生變更",
+        "original_title": "已保留原始檔案",
+        "original_body": "{error}\n未移除任何原始檔案。",
+        "saved_status": "在精確修訂版本確認後已重新命名 {identifier}"
+      },
+      "reload": {
+        "external_failed_title": "無法重新載入外部檔案",
+        "failed_title": "無法重新載入"
+      },
+      "import": {
+        "dialog_title": "匯入版面配置但不執行程式碼",
+        "filter": "數字鍵盤版面配置 (*.json *.py)",
+        "failed_title": "靜態匯入失敗 —— 原始檔案已保留",
+        "failed_body": "{error}\n\n匯入不會執行動態 Python。請保持原始檔案不變，或選擇一個已安裝的 Python 版面配置並明確選擇「信任 Python 並轉換」。"
+      },
+      "export": {
+        "invalid_title": "匯出無效",
+        "dialog_title": "匯出正規化 JSON",
+        "filter": "JSON 版面配置 (*.json)",
+        "protected": "匯出不能覆寫已安裝的預設。請使用「儲存」或選擇其他匯出路徑。",
+        "replace_title": "取代匯出檔案",
+        "replace_body": "取代 {path}？",
+        "failed_title": "匯出失敗",
+        "saved_status": "已匯出至 {path}；編輯器的儲存/啟用狀態未變更"
+      },
+      "ownership": {
+        "user_only": "只能修改使用者擁有的版面配置檔案",
+        "symlink_refused": "拒絕修改符號連結或使用者版面配置目錄以外的來源；請改為另存為新副本"
+      },
+      "refused": {
+        "offline_title": "安全離線拒絕",
+        "offline_body": "無法證明此驅動程式執行個體正在使用哪個版面配置。在取得即時狀態之前，重新命名/刪除會被停用。複製與匯出仍可使用；未移除任何檔案。",
+        "title": "檔案操作被拒絕",
+        "changed": "目前啟用選擇已變更或變得無法使用。原始檔案被保留；請使用已確認的替代項目重試。"
+      },
+      "delete": {
+        "replace_required_title": "需要替代項目",
+        "replace_required_body": "請先建立另一個預設。最後一個處於啟用狀態的預設不能刪除。",
+        "select_title": "刪除前需要替代項目",
+        "select_label": "啟用此替代項目並等待確認：",
+        "confirm_title": "替代項目套用後再刪除",
+        "confirm_body": "僅在確認 {replacement} @ {revision} 已套用後才刪除 {name}？",
+        "replacement_failed_title": "替代要求失敗 —— 原始檔案已保留",
+        "confirm_plain_title": "刪除使用者預設",
+        "confirm_plain_body": "永久刪除 {path}？此操作無法復原。",
+        "failed_title": "刪除失敗",
+        "deleted_status": "預設已刪除。請選擇其他版面配置，或新增一個預設。",
+        "saved_status": "在精確修訂版本確認後已刪除 {identifier}"
+      },
+      "display_replacement_failed_title": "無法顯示替代項目",
+      "removal": {
+        "canceled_status": "已取消檔案移除；原始檔案已保留。已持久化的替代啟用要求不會被復原。",
+        "close_title": "取消待處理的檔案操作？",
+        "close_body": "關閉會取消檔案移除並保留原始檔案。替代啟用要求會留在設定中。是否關閉？"
+      }
+    },
+    "trust": {
+      "confirm_title": "信任此預設中的命令？",
+      "confirm_body": "啟用此預設會讓驅動程式以你的使用者身分執行其中的 shell 動作與顯示取值查詢。驗證與預覽並未執行它們。僅當你信任該來源及這些命令時才啟用。",
+      "unavailable_title": "無法啟用",
+      "activation_failed_title": "啟用要求失敗",
+      "requested_status": "已要求 {identifier} @ {revision}；正在等待執行階段確認",
+      "convert_title": "為轉換執行一次受信任的 Python？",
+      "convert_body": "{path}\n\n這會以你的使用者身分執行任意 Python，包括匯入與副作用。失敗後無法復原這些影響。僅當你信任此檔案及其匯入項目時才繼續。結果會成為未儲存的 JSON 副本；原始檔案維持不變。這不會在驅動程式中啟用動態 Python。",
+      "convert_failed_title": "受信任的轉換失敗"
+    }
+  }
+}

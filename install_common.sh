@@ -252,10 +252,21 @@ def remove(path, preserve_config=True):
 for name in (
     'dialpad.py', 'dialpad_runtime.py', 'dialpad_layout.py', 'dialpad_layout_linux.py',
     'dialpad_layout_manager.py', 'dialpad_layout_editor.py', 'dialpad_ui.py',
-    'dialpad_overlay.py',
+    'dialpad_overlay.py', 'dialpad_help.py', 'dialpad_i18n.py',
     'dialpad_events.json', '.env', '__pycache__',
 ):
     remove(install / name)
+for language in ('en_US', 'zh_CN', 'zh_TW'):
+    remove(install / 'locales' / f'{language}.json')
+# Also remove known catalogs left by an older manager installation, including
+# the pre-rename nested English resource.
+remove(install / 'locales' / 'en.json')
+for section in ('common', 'help', 'editor', 'manager'):
+    for language in ('zh_CN', 'zh_TW'):
+        remove(install / 'locales' / f'{section}.{language}.json')
+locales = install / 'locales'
+if locales.is_dir() and not any(locales.iterdir()):
+    remove(locales)
 if purge:
     # Never remove the entire config/install directory: it can contain unrelated files.
     for directory in {config, install}:

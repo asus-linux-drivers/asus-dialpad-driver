@@ -1,0 +1,530 @@
+{
+  "common": {
+    "language": {
+      "label": "界面语言",
+      "system": "跟随系统",
+      "restart_hint": "语言设置将在下次启动管理器时生效。",
+      "save_failed": "无法保存语言设置",
+      "saved_hint": "语言设置已保存。重新启动管理器后生效；当前草稿保持不变。",
+      "names": {
+        "en_us": "English",
+        "zh_cn": "简体中文",
+        "zh_tw": "繁體中文"
+      }
+    }
+  },
+  "help": {
+    "window": {
+      "title": "DialPad 管理器帮助",
+      "search_placeholder": "搜索帮助主题与说明",
+      "search_accessible": "搜索帮助",
+      "content_accessible": "帮助说明",
+      "no_results": "没有匹配的帮助主题",
+      "shortcut_hint": "按 F1 查看帮助。",
+      "topic_accessible": "帮助：{topic}",
+      "open": "帮助 (F1)",
+      "action": "帮助"
+    },
+    "topics": {
+      "overview": {
+        "title": "快速入门",
+        "body": "复制一个内置预设，编辑用户副本，验证并保存。只有希望正在运行的驱动使用该布局时，才激活已保存的修订。\n\n命名函数就是工具环条目。不使用命名工具环时，也可以直接配置中心按钮和旋转动作。几何参数描述触控板坐标，不是浮层窗口大小。\n\n编辑、预览和本帮助均不会执行布局命令。激活布局可能使驱动执行命令和数值查询。激活导入的预设前，请先审阅其内容。"
+      },
+      "library": {
+        "title": "预设库与文件操作",
+        "body": "内置预设受到保护：使用“复制”创建可编辑的用户预设。“新建”创建草稿；“导入”加载经审阅的 JSON 或可静态解析的 Python 布局；“导出”写出可移植的 JSON 副本。“刷新”重新读取预设库。\n\n重命名或删除正在使用的预设前，必须由同一驱动实例确认替代修订已应用。在此之前，原文件会保留。取消待处理操作会保留原文件，但不会撤销已经写入配置的替代布局请求。"
+      },
+      "identity": {
+        "title": "标识符与显示名称",
+        "body": "预设标识符用于选择文件，必须符合 [A-Za-z0-9][A-Za-z0-9_-]*，不能是路径。可选的显示名称仅是标签，不会改变文件选择。\n\n函数标识与显示标题也相互独立。“重命名”更改函数标识及其引用；“显示标题”只改变向用户展示的标签。切换界面语言不会翻译已存储的名称、命令或路径。"
+      },
+      "state": {
+        "title": "草稿、已保存、已请求、已应用与恢复状态",
+        "body": "草稿是内存中的编辑内容；已保存对应文件修订；已请求对应配置中选择的布局；已应用表示运行中的驱动已确认使用该修订。保存成功或发出激活请求，并不证明驱动已经应用。\n\n热加载等待完整的无触点边界。按住期间的手势会使用原快照完成。只有已应用的修订持久化后，恢复记录才是最新状态。离线状态无法确认激活。"
+      },
+      "rules": {
+        "title": "应用匹配与规则顺序",
+        "body": "应用规则键先匹配可执行文件路径，再匹配窗口标题，按存储顺序进行小写子串匹配。合成器的 class/app_id 不是单独的匹配字段。\n\n保留规则 none 是回退项。匹配到明确为空的规则时，会有意禁用该应用的绑定。“上移/下移”改变优先级；更具体的匹配应位于宽泛匹配之前。"
+      },
+      "functions": {
+        "title": "命名函数与工具环",
+        "body": "命名函数按存储顺序成为工具环条目，从顶部顺时针排列。在这里添加、重命名、删除或调整顺序；在元数据对话框中编辑标题、图标和命令。\n\ncenter、clockwise、counterclockwise 是保留的动作区域，不是函数名。切换编辑视图不会删除直接动作或命名函数。\n\n预览使用实时浮层的绘制组件，显示静态基础图标并按 slices_minimum_count 补齐扇区。它不执行命令或查询、不猜测条件图标，也不模拟实时手势值。预览的中性背景与桌面透明浮层不同。"
+      },
+      "actions": {
+        "title": "动作与候选项顺序",
+        "body": "选择 center、clockwise 或 counterclockwise，然后添加或编辑动作。候选动作保留原有顺序，但带修饰键条件的候选项优先于无修饰键候选项。\n\n动作可以发出按键、相对轴事件、运行 Shell 命令，或者仅控制选择。函数可以只有命令，无须添加占位按键。删除动作只影响选中的候选项。"
+      },
+      "action_type": {
+        "title": "选择动作类型",
+        "body": "“键盘组合”发出选定顺序的按键/按钮事件。“相对轴事件”发出 REL_WHEEL 等事件的有符号数值。“Shell 命令”由驱动执行命令。“仅控制/选择”不输出按键，也不执行 Shell。\n\n更改类型不会自动丢弃不兼容的事件行。确认前请审阅；验证会报告不兼容组合。键盘动作也可以附带命令。"
+      },
+      "events": {
+        "title": "事件名、组合与相对数值",
+        "body": "按事件名搜索目录，例如 volume 或 ctrl。添加选中的事件，并按目标组合调整顺序。KEY_LEFTCTRL、REL_WHEEL 等事件标识符保持原样存储。\n\n相对数值是有符号整数，不是百分比，也不是显示数值查询。组合 REL_WHEEL 与 REL_WHEEL_HI_RES 时，需要分别指定各事件的数值。删除或调整行顺序会保留其余事件与数值的对应关系。"
+      },
+      "modifier": {
+        "title": "所需修饰键",
+        "body": "KEY_LEFTSHIFT 等可选修饰键使该候选动作仅在此键按住时可用。它是条件，不是另一个要输出的按键。\n\n留空表示无修饰键候选项。带修饰键的候选项优先。请使用目录中的准确事件名；界面不会翻译它，也不会推断键盘语言字符。"
+      },
+      "trigger": {
+        "title": "动作触发时机",
+        "body": "release 表示满足条件后在手势释放时运行。immediate 表示手势条件满足后立即运行，不等待释放。\n\n选择器可能显示翻译后的标签，但存储值仍是 release 和 immediate。旋转阈值与最短按住时间在适用时仍然有效。"
+      },
+      "duration": {
+        "title": "最短按住时长",
+        "body": "时长是动作可用前手势必须满足的非负秒数，不是在快捷键之后插入的延迟。\n\n零表示没有额外的按住时间要求。选择手势时序时，请一并考虑触发时机和旋转阈值。"
+      },
+      "command": {
+        "title": "Shell 命令与信任",
+        "body": "这是可执行的 Shell 文本，不是标签。当动作或命名函数被触发时，驱动以当前用户身份执行它。键盘动作也可以附带命令。\n\n编辑器与帮助不会执行命令。不要仅为预览布局而激活不可信的导入命令；激活还可能启动显示查询。"
+      },
+      "title": {
+        "title": "显示标题",
+        "body": "显示标题用于标注函数或动作，不会重命名其标识，也不改变输出。命名函数没有设置标题时，通常回退到函数标识。\n\n过长的工具标签会换行，然后使用省略号。画布悬浮提示中可以查看完整标题。用户编写的标题不会随界面语言翻译。"
+      },
+      "icon": {
+        "title": "图标文件或主题名称",
+        "body": "使用本地图像路径（例如 SVG）或已安装的图标主题名称。使用文件时建议采用绝对路径；相对路径取决于进程的工作目录。\n\n图标缺失或无法读取时，会回退到显示标题。导入/导出不会复制图标资源，其他桌面的绝对图标路径可能在本机不存在。预览只在本地解析基础图标，不运行查询。"
+      },
+      "unit": {
+        "title": "显示单位",
+        "body": "单位是附加到显示值后的文本，例如 % 或 dB。它不会转换数值，也不会改变输出的相对事件。\n\n静态预览不执行显示数值查询，因此不会编造一个数值来展示单位。"
+      },
+      "value": {
+        "title": "显示值查询",
+        "body": "显示数值查询是 Shell 文本，驱动读取其输出用于反馈。它可能在激活或元数据刷新时运行，并非只有输出动作之后才运行。请把它作为可执行代码审阅。\n\n静态编辑和预览从不执行查询。相对轴动作使用的是数值型事件值；为避免混淆 value 的两种含义，其显示查询字段会禁用。"
+      },
+      "threshold": {
+        "title": "旋转阈值 (treshold)",
+        "body": "启用“覆盖”后，可为此条目设置以度为单位的正旋转阈值。未覆盖时，使用现有驱动/默认阈值。\n\n历史配置拼写 treshold 是有意保留的，保存布局时不会更改。这是手势阈值，不是绘制工具环的直径。"
+      },
+      "conditional_icons": {
+        "title": "条件图标映射",
+        "body": "将准确的显示查询结果映射到图标文件或主题名称。查询结果键必须唯一。这些键是结果字符串，本身不是 Shell 命令。\n\n只有驱动会执行查询并选择条件图标。静态预览显示基础图标或文字回退，不猜测查询结果。删除一行只移除该结果映射。"
+      },
+      "geometry": {
+        "title": "触控板几何参数",
+        "body": "坐标与直径使用触控板绝对单位，不是屏幕像素。驱动报告的设备边界可用于验证；缺少设备边界时，画布只是示意图，不是校准结果。\n\n拖动圆内区域移动圆，拖动方形控制点调整外圆、中心按钮或右上角激活区域大小。激活区域始终锚定在右上角。这些控件不会调整浮层窗口大小。"
+      },
+      "raw_json": {
+        "title": "原始 JSON 草稿",
+        "body": "原始 JSON 是独立草稿。“将 JSON 应用到表单”先验证，再替换结构化值；无效文本会保留。“丢弃原始草稿”恢复最近有效的表单表示。\n\n存在未应用的原始草稿时，会禁止结构化编辑，以免覆盖草稿。保存不能悄悄忽略无效 JSON。JSON 字段与事件标识符不会随界面翻译改变。"
+      },
+      "save_activate": {
+        "title": "保存、重新加载与激活",
+        "body": "“验证”检查当前文档但不执行它。“保存”写入预设，不改变选中的布局标识符；保存正在使用的文件会请求安全热加载。“激活已保存的修订”请求使用准确的已保存修订，并等待运行时确认。\n\n“重新加载文件”只有经确认后才丢弃本地编辑。外部修改不会被悄悄覆盖：请加载外部文件，或另存为副本。关闭管理器不会停止驱动。"
+      },
+      "trust": {
+        "title": "受信任的 Python 转换",
+        "body": "普通 Python 布局导入使用静态解析，不执行文件。不支持的动态 Python 会被拒绝，而不是猜测转换。\n\n“信任 Python 并转换”是明确的执行边界：它以你的用户身份执行已审阅的 Python。编辑器无法回滚其副作用。这项许可并不授权驱动执行其他动态 Python 布局，离线转换也不提供该执行路径。"
+      },
+      "language": {
+        "title": "界面语言",
+        "body": "跟随系统时，普通中文区域使用简体中文；zh_TW、zh_HK、zh_MO 或 Hant 使用繁体中文；其他语言使用 English。也可以明确选择任一受支持的界面语言。\n\n设置保存在当前用户的管理器设置中，不在 dialpad_dev 或预设里。它在下次启动管理器时生效；更改设置不会重建已打开的窗口或丢弃草稿。用户数据、命令文本、路径和底层错误详情均保留原文。"
+      },
+      "troubleshooting": {
+        "title": "排查问题与验证边界",
+        "body": "如果编辑控件不可用，请检查预设是否为内置/只读、是否有未应用的原始草稿，或是否存在待处理的重命名/删除。编辑内置预设前请先复制。离线模式可编辑，但无法激活或确认运行中的修订。\n\n已保存/已请求的修订不代表已应用确认。激活待处理或被拒绝时，请检查实例/修订状态和驱动日志。缺失图标可能属于本机未安装的桌面主题。\n\n真实登录启动、休眠恢复、Nix 构建、其他桌面会话/平台、绘制变更后的物理工具选择，以及实时数值/条件图标反馈，均需单独验收。证据与未完成清单见 docs/issue-31-layout-manager-plan.md。"
+      }
+    }
+  },
+  "editor": {
+    "draft": {
+      "apply_before_save": "请先应用或放弃原始 JSON 草稿，然后再保存"
+    },
+    "rename": {
+      "already_exists": "{name} 已存在"
+    },
+    "metadata": {
+      "title": "显示标题",
+      "icon": "图标文件路径或主题名称",
+      "unit": "单位",
+      "command": "Shell 命令",
+      "value": "显示值查询",
+      "driver_only_placeholder": "仅由驱动程序执行，此预览从不执行",
+      "icon_placeholder": "SVG 文件路径，或图标主题名称",
+      "icon_hint": "图标缺失或无法读取时，将回退为标签文字。",
+      "relative_value_tooltip": "相对事件使用数值，而不是显示查询",
+      "override": "覆盖",
+      "degrees_suffix": " 度",
+      "threshold_row": "旋转阈值 (treshold)",
+      "query_result_column": "查询结果",
+      "icon_column": "图标（文件路径或主题名称）",
+      "conditional_icons": "条件图标",
+      "add_icon": "添加图标",
+      "remove_icon": "移除图标",
+      "error": {
+        "unique_icons": "条件图标的查询结果必须唯一"
+      }
+    },
+    "function": {
+      "title": "工具环函数元数据 — {name}",
+      "note": "显示标题和图标就是工具环扇区所展示的内容。仅包含命令的函数同样有效。旋转绑定是可选的。",
+      "invalid_metadata": "元数据无效"
+    },
+    "action": {
+      "edit_title": "编辑快捷操作",
+      "add_title": "添加快捷操作",
+      "kind": {
+        "keys": "键盘组合",
+        "relative": "相对轴事件",
+        "command": "Shell 命令",
+        "control": "仅控制 / 选择"
+      },
+      "type_label": "操作类型",
+      "modifier_label": "所需修饰键（可选）",
+      "trigger": {
+        "release": "手势松开时",
+        "immediate": "匹配后立即"
+      },
+      "trigger_label": "触发方式",
+      "duration_label": "最短按住时长",
+      "duration_suffix": " 秒",
+      "command_label": "Shell 命令",
+      "command_placeholder": "可与按键组合并存；仅在驱动程序中运行",
+      "events_group": "输出事件 — 有序组合 / 数值型相对值",
+      "search_placeholder": "搜索事件名称，例如 volume 或 ctrl",
+      "add_event": "添加所选事件",
+      "event_column": "事件",
+      "value_column": "数值",
+      "remove_event": "移除",
+      "event_up": "上移",
+      "event_down": "下移",
+      "metadata_group": "显示元数据 — 静态预览从不执行查询",
+      "relative_value_tooltip": "带符号整数事件值",
+      "error": {
+        "signed_integers": "相对事件值必须是带符号整数",
+        "no_events": "请至少添加一个事件，或选择命令/仅控制操作",
+        "remove_keyboard": "使用相对轴模式前请移除键盘事件",
+        "remove_relative": "使用键盘模式前请移除相对事件",
+        "command_required": "请输入 Shell 命令，或选择仅控制操作",
+        "invalid": "操作无效：{detail}"
+      }
+    },
+    "geometry": {
+      "circle_center_x": "圆心 X",
+      "circle_center_y": "圆心 Y",
+      "circle_diameter": "外圆直径",
+      "center_button_diameter": "中心按钮直径",
+      "top_right_icon_width": "激活区域宽度",
+      "top_right_icon_height": "激活区域高度",
+      "canvas_tooltip": "拖动圆形可移动位置。拖动方形手柄可调整外圆、中心按钮或右上角激活区域的大小。",
+      "measured_bounds": "实测设备范围 · 绝对触摸板坐标",
+      "schematic": "示意图 · 设备范围未知 · 绝对坐标",
+      "activation_region": "激活区域",
+      "drag_to_move": "拖动以移动"
+    },
+    "preview": {
+      "caption": "工具环外观 · 实时覆盖画布 · {width}×{height}",
+      "order_named": "{count} 个具名函数 · 从顶部起顺时针 {slices} 个扇区 · 由 slices_minimum_count = {minimum} 得到 {padding} 个空白补位扇区",
+      "order_single": "单一功能 / 共用控件：没有具名工具环条目，因此没有扇区带函数标签。在“应用规则与快捷方式”标签页中命名的函数会成为工具环条目。",
+      "static_note": "仅为静态外观：命令、显示值查询和条件图标查询结果都不会被执行。"
+    }
+  },
+  "manager": {
+    "window": {
+      "title": "DialPad 布局管理器"
+    },
+    "runtime": {
+      "offline": "离线编辑 —— 无法激活",
+      "disabled": "Linux 运行时集成已禁用；仍可进行离线编辑",
+      "unavailable": "驱动不可用 —— 仅限离线编辑（{error}）"
+    },
+    "state": {
+      "config_path": "配置目录：{path}",
+      "source_bundled": "内置预设 · 只读 —— 用“复制”来编辑",
+      "source_user": "用户预设",
+      "overrides_inline": "\n覆盖：{paths}",
+      "source_descriptor": "{identifier} · {provenance} · {format}\n{path}",
+      "new_draft": "新的用户草稿 · 尚未保存文件 · 保存时选择标识符",
+      "unapplied_raw": "未应用的原始草稿",
+      "unsaved": "未保存的草稿",
+      "saved": "已保存，未更改",
+      "no_document": "没有可编辑的文档",
+      "running": "已保存的修订版本正在运行",
+      "not_running": "无法确认已保存的修订版本正在运行",
+      "running_with_draft": "{running}；草稿尚未运行",
+      "summary": "{state} · 已保存的修订版本：{revision}\n{running}",
+      "revision_tooltip": "保存的来源修订版本：{revision}\n已应用的修订版本：{applied}",
+      "pending_rename": "正在等待 {replacement} @ {revision} 应用后再重命名。在得到精确确认之前会保留原文件。",
+      "pending_deletion": "正在等待 {replacement} @ {revision} 应用后再删除。在得到精确确认之前会保留原文件。",
+      "acknowledged": "驱动已确认 {identifier} @ {revision}。",
+      "applied": "驱动已应用 {identifier} @ {revision}。",
+      "requested": "管理器已请求 {identifier} @ {revision}；尚未得到同一驱动实例的确认。",
+      "config_error": "配置错误：{error}",
+      "config_request": "已配置的请求：{identifier}",
+      "config_default": "已配置的请求：无覆盖（使用驱动的 argv 默认值）",
+      "identity": "{identifier} @ {revision}",
+      "driver_summary": "{config} · 驱动：{state}\n请求：{requested} · 已应用：{running} · 代次 {generation}",
+      "recovery_warning": "\n恢复不是最新的：{detail}",
+      "recovery_detail": "持久性未确认",
+      "instance_tooltip": "实例：{instance}\n请求的修订版本：{requested}\n已应用的修订版本：{applied}",
+      "offline_summary": "{config} · {error}",
+      "instance_changed_title": "运行时实例已更改",
+      "instance_changed_body": "待处理的文件操作已取消。原文件已被保留。重试前请先查看新的实例。",
+      "replacement_rejected_title": "替换已被拒绝",
+      "replacement_rejected_body": "未移除任何文件。正在运行的布局被保留；在重命名/删除之前，请先选择一个有效的替换项。",
+      "driver": {
+        "pending": "等待中",
+        "applied": "已应用",
+        "rejected": "已拒绝",
+        "recovered": "已恢复",
+        "requested": "已请求",
+        "unknown": "未知"
+      }
+    },
+    "library": {
+      "title": "快捷预设",
+      "filter_placeholder": "筛选标识符 / 来源",
+      "buttons": {
+        "new": "新建",
+        "copy": "复制…",
+        "import": "导入…",
+        "export": "导出…",
+        "rename": "重命名…",
+        "delete": "删除…",
+        "refresh": "刷新预设库"
+      },
+      "select_placeholder": "选择一个布局，或新建一个预设。",
+      "discover_failed": "无法发现布局",
+      "item": {
+        "bundled": "{identifier}\n内置 · 只读 · {format}",
+        "user": "{identifier}\n用户 · {format}",
+        "overrides_suffix": " · 覆盖 {count} 项",
+        "tooltip_overrides": "\n覆盖：\n{paths}"
+      },
+      "name_required": "名称不能为空"
+    },
+    "identity": {
+      "display_name_placeholder": "可选的显示名称；绝不是文件路径",
+      "display_name": "显示名称"
+    },
+    "actions": {
+      "cancel_pending": "取消待处理的重命名 / 删除",
+      "trust_convert": "信任 Python 并转换…",
+      "reload_file": "重新加载文件",
+      "validate": "校验",
+      "save": "保存",
+      "activate": "激活已保存的修订版本",
+      "buttons": {
+        "add": "添加动作…",
+        "edit": "编辑…",
+        "remove": "移除",
+        "up": "上移",
+        "down": "下移"
+      },
+      "precedence_note": "带修饰键的备选动作优先；在每个优先级分组内保持原有顺序。",
+      "save_active": "保存并请求重新加载",
+      "save_tooltip": "保存正在使用的文件会请求运行时重新加载。保存绝不会更改所选布局的标识符。",
+      "item": {
+        "key_command": "{keys} + shell 命令",
+        "command": "命令：{command}",
+        "control": "控制 / 选择",
+        "value_suffix": "{description} = {values}",
+        "modifier_prefix": "[{modifier}] {description}",
+        "titled": "{index}. {title} · {description}",
+        "plain": "{index}. {description}",
+        "hold": "\n{trigger} · 按住 {duration} 秒"
+      },
+      "triggers": {
+        "release": "释放",
+        "immediate": "立即"
+      }
+    },
+    "status": {
+      "static_note": "静态编辑与预览不会执行布局命令"
+    },
+    "rules": {
+      "note": "规则按其存储顺序依次测试。‘none’ 是回退项；空规则有意不包含任何绑定。",
+      "buttons": {
+        "add": "添加",
+        "rename": "重命名",
+        "remove": "移除",
+        "move_up": "上移",
+        "move_down": "下移"
+      },
+      "mode": {
+        "single": "单一功能 / 共享控件",
+        "multifunction": "多功能 / 命名功能"
+      },
+      "tab": "应用规则与快捷方式",
+      "mapping": {
+        "none_selected": "请选择一个应用规则。",
+        "empty": "空映射：没有绑定，也没有工具环条目。请添加直接动作或命名功能。",
+        "combined": "直接控件与命名功能组合（即工具环条目）",
+        "multifunction": "多功能映射：命名功能即工具环条目，按此存储顺序排列",
+        "single": "单一功能映射：没有命名工具环条目，因此环上没有带标签的扇区",
+        "suffix": "{description}。切换编辑器视图绝不会删除任何一组绑定。"
+      },
+      "add_title": "添加应用规则",
+      "name_label": "应用可执行文件 / 匹配规则：",
+      "duplicate_title": "规则重复",
+      "duplicate_body": "该应用规则已存在",
+      "fallback_title": "回退规则",
+      "fallback_rename_body": "必需的 ‘none’ 回退项不能重命名",
+      "rename_title": "重命名规则",
+      "fallback_remove_body": "必需的 ‘none’ 回退项不能移除；其绑定可以为空",
+      "remove_title": "移除应用规则",
+      "remove_body": "移除 {name} 及其所有绑定？"
+    },
+    "functions": {
+      "title": "命名功能 · 工具环条目 · 存储顺序从顶部按顺时针排列",
+      "buttons": {
+        "add": "添加功能",
+        "rename": "重命名",
+        "remove": "移除",
+        "up": "上移",
+        "down": "下移"
+      },
+      "metadata": "命令 / 显示元数据…",
+      "preview_ring": "预览工具环",
+      "preview_ring_tooltip": "在“几何与静态预览”标签页中显示工具环的静态外观。不会运行命令和取值查询。",
+      "preview_status": "工具环预览使用与实际叠加层相同的画布；不会运行命令和取值查询。",
+      "add_title": "添加命名功能",
+      "add_label": "功能标识（顺序决定其在环上的扇区）：",
+      "invalid_name_title": "功能名称无效",
+      "name_conflict_body": "该名称已存在，或被保留给直接绑定",
+      "rename_title": "重命名功能",
+      "rename_label": "功能标识：",
+      "reserved_title": "保留名称",
+      "reserved_body": "方向名称不能用作功能标识",
+      "duplicate_title": "功能重复",
+      "remove_title": "移除命名功能",
+      "remove_body": "移除 {name} 及其动作？",
+      "invalid_metadata_title": "功能元数据无效"
+    },
+    "directions": {
+      "center": "中心按钮",
+      "clockwise": "顺时针旋转",
+      "counterclockwise": "逆时针旋转"
+    },
+    "geometry": {
+      "template": "硬件模板 · 触摸板绝对坐标",
+      "instructions": "拖动圆内部可移动圆。方形手柄可调整外圆、中心按钮和激活区域的大小。激活区域始终锚定在右上角。\n\n设备信息可用时会校验模板；示意图并非校准。叠加层外观与触摸板几何无关。",
+      "tab": "几何与静态预览"
+    },
+    "raw": {
+      "note": "在“应用”成功之前，原始文本变更始终是独立的草稿。无效的 JSON 绝不会替换表单或已保存文件。",
+      "apply": "将有效 JSON 应用到表单",
+      "discard": "放弃原始变更",
+      "tab": "原始 JSON",
+      "pending_note": "存在未应用的原始草稿。在进行结构化编辑 / 保存之前，请先应用有效的 JSON 或放弃原始变更。",
+      "invalid_body": "原始草稿无效，已保留：\n{error}",
+      "discard_title": "放弃原始 JSON 草稿",
+      "discard_body": "放弃未应用的原始文本并恢复上一次有效的表单？",
+      "apply_title": "未应用的原始 JSON",
+      "apply_body": "是否先应用原始 JSON 草稿再继续？无效文本将保持原样。"
+    },
+    "validation": {
+      "open_failed": "无法打开选定的来源。未替换为优先级更低的文件。\n{error}\nPython 代码未被执行。",
+      "valid_layout": "布局有效 · 命令和取值查询尚未执行",
+      "valid_raw": "原始草稿有效（未应用到表单）",
+      "valid_layout_plain": "布局有效 · 未执行任何命令",
+      "imported": "已从 {path} 静态导入。原文件未更改。{count} 个命令/查询字段未被执行；激活前请审查其可信度。",
+      "trusted_converted": "已为转换执行受信任的 Python。激活前请另存为独立的 JSON 副本；原始来源未更改。"
+    },
+    "common": {
+      "none": "无"
+    },
+    "operations": {
+      "guard": {
+        "pending_title": "有文件操作待处理",
+        "pending_body": "请等待确认，或先取消待处理的重命名/删除。原文件仍被保留。",
+        "draft_title": "未保存的布局草稿",
+        "draft_body": "离开此草稿前是否保存更改？选择“放弃”也会丢弃未应用的原始文本。"
+      },
+      "copy": {
+        "title": "保存用户副本",
+        "label": "新标识符（字母、数字、下划线、连字符）：",
+        "identifier_exists": "该标识符已安装。请选择不同的标识符；“复制”不会覆盖现有预设。",
+        "destination_exists": "目标已存在",
+        "failed_title": "无法创建副本",
+        "invalid_title": "布局无效",
+        "copy_failed_title": "复制失败",
+        "saved_status": "用户副本已保存，尚未激活。"
+      },
+      "save": {
+        "external_change": "选定的文件已被外部更改。请重新加载，或将草稿另存为新副本。",
+        "read_only_title": "内置预设为只读",
+        "read_only_body": "请使用“复制”创建独立的用户预设",
+        "confirm_title": "保存可能请求实时重新加载",
+        "confirm_body": "保存会更改被监视的预设文件。如果驱动正在使用它，这会请求重新加载；只有在得到确认后，正在运行的修订版本才会改变。没有实时状态时，无法确认当前的运行时选择。是否继续？",
+        "failed_title": "保存失败 —— 草稿已保留",
+        "saved_status": "已以原子方式保存。有关实际应用的修订版本，请查看运行时状态。"
+      },
+      "rename": {
+        "conflict_title": "外部修订版本冲突",
+        "reload_button": "重新加载外部文件",
+        "copy_button": "另存为新副本…",
+        "discard_title": "放弃本地更改",
+        "discard_body": "重新加载会丢弃此本地草稿。是否继续？",
+        "failed_title": "重命名未完成",
+        "failed_body": "{error}\n失败时原文件会被保留。为避免数据丢失，任何新保存的副本都会保留。",
+        "source_changed": "原布局来源在移除之前发生了更改",
+        "original_title": "已保留原文件",
+        "original_body": "{error}\n未移除任何原文件。",
+        "saved_status": "在精确修订版本确认后已重命名 {identifier}"
+      },
+      "reload": {
+        "external_failed_title": "无法重新加载外部文件",
+        "failed_title": "无法重新加载"
+      },
+      "import": {
+        "dialog_title": "导入布局但不执行代码",
+        "filter": "数字键盘布局 (*.json *.py)",
+        "failed_title": "静态导入失败 —— 原文件已保留",
+        "failed_body": "{error}\n\n导入不会执行动态 Python。请保持原文件不变，或选择一个已安装的 Python 布局并显式选择“信任 Python 并转换”。"
+      },
+      "export": {
+        "invalid_title": "导出无效",
+        "dialog_title": "导出规范化 JSON",
+        "filter": "JSON 布局 (*.json)",
+        "protected": "导出不能覆盖已安装的预设。请使用“保存”或选择其他导出路径。",
+        "replace_title": "替换导出文件",
+        "replace_body": "替换 {path}？",
+        "failed_title": "导出失败",
+        "saved_status": "已导出到 {path}；编辑器的保存/激活状态未更改"
+      },
+      "ownership": {
+        "user_only": "只能修改用户拥有的布局文件",
+        "symlink_refused": "拒绝修改符号链接或用户布局目录之外的来源；请改为另存为新副本"
+      },
+      "refused": {
+        "offline_title": "安全离线拒绝",
+        "offline_body": "无法证明此驱动实例正在使用哪个布局。在获得实时状态之前，重命名/删除会被禁用。复制和导出仍然可用；未移除任何文件。",
+        "title": "文件操作被拒绝",
+        "changed": "当前激活选择已更改或变得不可用。原文件被保留；请使用已确认的替换项重试。"
+      },
+      "delete": {
+        "replace_required_title": "需要替换项",
+        "replace_required_body": "请先创建另一个预设。最后一个处于激活状态的预设不能删除。",
+        "select_title": "删除前需要替换项",
+        "select_label": "激活此替换项并等待确认：",
+        "confirm_title": "替换项应用后再删除",
+        "confirm_body": "仅在确认 {replacement} @ {revision} 已应用后才删除 {name}？",
+        "replacement_failed_title": "替换请求失败 —— 原文件已保留",
+        "confirm_plain_title": "删除用户预设",
+        "confirm_plain_body": "永久删除 {path}？此操作无法撤销。",
+        "failed_title": "删除失败",
+        "deleted_status": "预设已删除。请选择其他布局，或新建一个预设。",
+        "saved_status": "在精确修订版本确认后已删除 {identifier}"
+      },
+      "display_replacement_failed_title": "无法显示替换项",
+      "removal": {
+        "canceled_status": "已取消文件移除；原文件已保留。已持久化的替换激活请求不会被回滚。",
+        "close_title": "取消待处理的文件操作？",
+        "close_body": "关闭会取消文件移除并保留原文件。替换激活请求会留在配置中。是否关闭？"
+      }
+    },
+    "trust": {
+      "confirm_title": "信任此预设中的命令？",
+      "confirm_body": "激活此预设会让驱动以你的用户身份运行其中的 shell 动作和显示取值查询。校验和预览并未执行它们。仅当你信任该来源及这些命令时才激活。",
+      "unavailable_title": "无法激活",
+      "activation_failed_title": "激活请求失败",
+      "requested_status": "已请求 {identifier} @ {revision}；正在等待运行时确认",
+      "convert_title": "为转换执行一次受信任的 Python？",
+      "convert_body": "{path}\n\n这会以你的用户身份执行任意 Python，包括导入和副作用。失败后无法撤销这些影响。仅当你信任此文件及其导入时才继续。结果会成为未保存的 JSON 副本；原文件保持不变。这不会在驱动中启用动态 Python。",
+      "convert_failed_title": "受信任的转换失败"
+    }
+  }
+}

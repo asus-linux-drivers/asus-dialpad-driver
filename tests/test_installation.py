@@ -47,11 +47,15 @@ class UninstallTests(unittest.TestCase):
                     install / "layouts" / "proartp16.py": b"customized bundled layout",
                 }
                 unrelated = {install / "unrelated.txt": b"install user data",
-                             config / "unrelated.txt": b"config user data"}
+                             config / "unrelated.txt": b"config user data",
+                             install / "locales" / "custom.json": b"user-owned translation"}
                 for path, data in (protected | unrelated).items():
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(data)
-                programs = [install / name for name in ("dialpad.py", "dialpad_overlay.py")]
+                programs = [install / name for name in ("dialpad.py", "dialpad_overlay.py",
+                            "dialpad_help.py", "dialpad_i18n.py", "locales/help.zh_CN.json",
+                            "locales/manager.zh_TW.json", "locales/en.json",
+                            "locales/en_US.json", "locales/zh_CN.json", "locales/zh_TW.json")]
                 for program in programs:
                     program.write_text("installed program")
                 self.run_helper(install, config, "dialpad_remove_program_files 0")

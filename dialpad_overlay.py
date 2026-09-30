@@ -75,6 +75,7 @@ class OverlayCanvas(QWidget):
         self.title = None
         self.titles = []
         self.icons = []
+        self.selected_index = None
         self.center_pressed = False
         self.value = None
         self.value_angle_start = None
@@ -82,7 +83,7 @@ class OverlayCanvas(QWidget):
         self.value_show_only_progress = True
 
     def set_feedback(self, payload):
-        """Apply the existing driver feedback semantics without showing a window."""
+        """Apply feedback, retaining ring structure and identity on partial packets."""
         if payload.get("enabled") is not None:
             self.enabled = payload["enabled"]
         value = payload.get("value")
@@ -98,10 +99,12 @@ class OverlayCanvas(QWidget):
             self.value_angle_start = payload.get("value_angle_start")
             self.unit = payload.get("unit")
         self.value_show_only_progress = payload.get("value_show_only_progress")
-        titles = payload.get("titles", [])
+        if "selected_index" in payload:
+            self.selected_index = payload["selected_index"]
+        titles = payload.get("titles")
         if isinstance(titles, list):
             self.titles = titles
-        icons = payload.get("icons", [])
+        icons = payload.get("icons")
         if isinstance(icons, list):
             self.icons = icons
         self.title = payload.get("title")
@@ -180,11 +183,10 @@ class OverlayCanvas(QWidget):
             painter.drawPath(ring_sector(outer, center, start, -360 * progress / 100))
 
         count = max(len(self.titles), len(self.icons))
-        active_index = self.titles.index(self.title) if self.title and self.title in self.titles else -1
         for index in range(count):
             span = 360 / count
             angle = math.radians((index + .5) * span - 90)
-            active = index == active_index
+            active = index == self.selected_index
             painter.setPen(QPen(COLOR_OUTER_BG, 1))
             painter.setBrush(COLOR_PROGRESS if active else Qt.BrushStyle.NoBrush)
             painter.drawPath(ring_sector(outer, center, 90 - index * span, -span))

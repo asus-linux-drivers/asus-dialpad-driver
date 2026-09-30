@@ -464,6 +464,17 @@ class MappingAndContactTests(unittest.TestCase):
         self.assertEqual(select_profile(profiles, "other", "My EDITOR"), ("editor", {"center": []}))
         self.assertEqual(select_profile(profiles, "code", "editor", True)[0], "none")
 
+    def test_reserved_none_is_fallback_only_after_binary_and_title_matching(self):
+        profiles = {"none": {"center": ["fallback"]}, "editor": {"center": ["editor"]}}
+        self.assertEqual(select_profile(profiles, "/opt/none-helper", "My EDITOR"),
+                         ("editor", profiles["editor"]))
+        self.assertEqual(select_profile(profiles, "unmatched", "none Editor window"),
+                         ("editor", profiles["editor"]))
+        self.assertEqual(select_profile(profiles, "/opt/none-editor", "other"),
+                         ("editor", profiles["editor"]))
+        self.assertEqual(select_profile(profiles, "/opt/none-helper", "other"),
+                         ("none", profiles["none"]))
+
     def test_metadata_icon_map_is_not_mistaken_for_action_bindings(self):
         profiles = {"none": {
             "clockwise": [{"key": ["wheel", "hires"], "event_values": [1, 120]}],

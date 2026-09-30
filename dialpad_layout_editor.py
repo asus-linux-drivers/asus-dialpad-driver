@@ -724,6 +724,7 @@ class RingPreview(QWidget):
             "titles": self.titles + [None] * padding,
             "icons": self.icons + [None] * padding,
             "title": None,
+            "selected_index": None,
             "value": None,
             "unit": None,
             "value_angle_start": None,

@@ -241,6 +241,24 @@ class HelpLanguageTests(unittest.TestCase):
         self.assertEqual(tr("sample.first", name="opaque"), "Original opaque")
         self.assertEqual(tr("sample.second"), "Translated second")
 
+    def test_translation_format_spec_and_conversion_mismatches_fall_back(self):
+        (self.root / "en_US.json").write_text(json.dumps({"sample": {
+            "numeric": "Status {detail}",
+            "conversion": "Detail {detail!s}",
+            "reordered": "{first} / {second}",
+        }}), encoding="utf-8")
+        (self.root / "zh_CN.json").write_text(json.dumps({"sample": {
+            "numeric": "数值 {detail:d}",
+            "conversion": "内容 {detail!r}",
+            "reordered": "{second} 和 {first}",
+        }}), encoding="utf-8")
+        with self.assertLogs("dialpad_i18n", level="WARNING") as logged:
+            initialize_i18n(self.app, settings=self.settings, preference="zh_CN", catalog_dir=self.root)
+        self.assertEqual(len(logged.output), 2)
+        self.assertEqual(tr("sample.numeric", detail="opaque"), "Status opaque")
+        self.assertEqual(tr("sample.conversion", detail="opaque"), "Detail opaque")
+        self.assertEqual(tr("sample.reordered", first="one", second="two"), "two 和 one")
+
     def test_missing_optional_translation_uses_english_but_english_is_required(self):
         (self.root / "en_US.json").write_text(json.dumps({"sample": {"message": "Required English"}}), encoding="utf-8")
         with self.assertLogs("dialpad_i18n", level="WARNING"):

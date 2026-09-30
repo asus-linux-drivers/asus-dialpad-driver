@@ -299,7 +299,7 @@ Then you can enable the service, `services.asus-dialpad-driver`, in your `config
 
 Configuration, user layouts, bundled-layout customizations, and `.layout-state/` recovery data are preserved by default, including when configuration and installation share a directory. The installer records a custom configuration directory in `.installation.json`; reinstall/uninstall reads that path unless explicitly overridden. Removing program files also removes unchanged recorded CLI/manager launchers and desktop entries. Modified launchers are retained.
 
-The uninstaller offers an explicit `PURGE` confirmation for deleting the selected configuration/layout/recovery data. Back up custom layouts first. It does not delete an entire configuration directory that may contain unrelated files.
+The uninstaller offers an explicit `PURGE` confirmation for deleting the selected configuration/layout/recovery data. Back up custom layouts first. It does not delete an entire configuration directory that may contain unrelated files. If a partial installation has lost `dialpad.py`, it still removes exactly named DialPad service templates, udev rules, and module-load files that remain; an editor-only installation does not trigger service or privileged cleanup.
 
 To uninstall run
 
@@ -313,6 +313,7 @@ CONFIG_FILE_NAME="dialpad_dev"
 LOGS_DIR_PATH="/var/log/asus-dialpad-driver" # only for install and uninstall logs
 SERVICE_INSTALL_DIR_PATH="$HOME/.config/systemd/user"
 INSTALL_UDEV_DIR_PATH="/usr/lib/udev"
+MODULES_LOAD_DIR_PATH="/etc/modules-load.d"
 
 # e.g. for BazziteOS (https://github.com/asus-linux-drivers/asus-numberpad-driver/issues/198)
 $ INSTALL_DIR_PATH="/home/$USER/.local/share/asus-dialpad-driver"\
@@ -370,7 +371,7 @@ On NixOS, set `hardware.asus-dialpad-driver.layoutManager.enable = true`; this c
 
 Named functions are the floating overlay's tool-ring entries, not a separate collection to configure. In **Multifunction / named functions**, use **Add function**, **Up/Down**, and **Command / display metadata…** to edit their order, labels, icons, units, and value queries. The bundled `proartp16` preset's `none` fallback uses direct controls; its named-function example is attached to `/usr/share/code/code`. To make a ring available outside that application, edit the appropriate application rule in a user copy.
 
-The preview resolves each function's base `icon` as a local file or an icon-theme name. Missing or unreadable icons fall back to the display title; long labels wrap to two lines and use an ellipsis for overflow. Hovering the canvas exposes the full tool labels. The preview uses a neutral background, whereas the live overlay retains desktop transparency, so compositor effects and background contrast can differ.
+The preview resolves each function's base `icon` as a local file or an icon-theme name. Missing or unreadable icons fall back to the display title; long labels wrap to two lines and use an ellipsis for overflow. Hovering the canvas exposes the full tool labels. Live feedback highlights the selected function by its stored index, not its display title, so empty or repeated titles do not change the highlighted sector. The static preview has no selected function. The preview uses a neutral background, whereas the live overlay retains desktop transparency, so compositor effects and background contrast can differ.
 
 Previewing never binds the feedback socket, executes commands/value queries, or evaluates conditional icon queries. It shows base icons rather than guessing a query result, and does not simulate live numeric values or gesture progress. Overlay window size and colors are not touchpad geometry settings and are not edited by the geometry canvas.
 
@@ -400,7 +401,7 @@ Translation resources are three independent UTF-8 files: `locales/en_US.json`, `
 }
 ```
 
-The same nested path appears in all three language files. Changing English wording does not rename its key. Translations must retain named `{placeholders}`; user values are formatted once after lookup. Missing or incompatible translated entries fall back to the English file, and catalog load failures are logged. English is a required resource; invalid lookup syntax and paths missing from English raise errors rather than displaying message IDs or treating them as English text. No source-text compatibility lookup remains. A per-user preference still stored as the earlier bare `en` keeps selecting English; the next language selection writes the standard identifier.
+The same nested path appears in all three language files. Changing English wording does not rename its key. Translations must retain named `{placeholders}` with the same format specifications and conversions; user values are formatted once after lookup. Missing or incompatible translated entries fall back to the English file, and catalog load failures are logged. English is a required resource; invalid lookup syntax and paths missing from English raise errors rather than displaying message IDs or treating them as English text. No source-text compatibility lookup remains. A per-user preference still stored as the earlier bare `en` keeps selecting English; the next language selection writes the standard identifier.
 
 No catalog compilation tool or additional dependency is required. Ordinary manager installation and the optional Nix manager package include all three files; upgrading retires only the old manager-owned section catalogs and the pre-rename `en.json`. Uninstallation preserves unrelated files under `locales/`. The headless driver and floating overlay do not import the help or i18n modules.
 
@@ -461,7 +462,7 @@ Version 1 contains `schema_version`, `geometry`, `app_shortcuts`, and optional `
 - `command` runs a shell action and can accompany keys. A trigger/duration-only center entry is a valid selection control. Command-only functions need no invented rotation bindings.
 - `trigger` is `release` (default) or `immediate`; `duration` is a nonnegative hold duration in seconds. `modifier` is a single key/button event condition. Modifier-specific alternatives take precedence, preserving their original relative order; unmodified alternatives match when no configured shortcut modifier is held.
 - `title`, `icon`, `icons` (query-result-to-icon mapping), `unit`, and historical `treshold` provide metadata. A display title is not a selected function identifier; labels such as `Scroll` do not require a function with that name.
-- Application matching preserves the existing ordered, case-sensitive rule keys against lowercased binary/title strings: the first binary substring match wins, then the first title substring match, then `none`. Use lowercase rule keys. An explicitly empty matched rule disables its bindings rather than falling back.
+- Application matching preserves the existing ordered, case-sensitive rule keys against lowercased binary/title strings: the first binary substring match wins, then the first title substring match, then `none`. The reserved `none` rule never participates in substring matching. Use lowercase rule keys. An explicitly empty matched rule disables its bindings rather than falling back.
 - Rule, function, and action order is preserved by serialization. Unknown fields, duplicate JSON keys, unsupported schema versions, non-finite geometry, invalid event/value combinations, and missing `none` are errors with field paths. Missing device information does not block offline validation.
 
 The portable picker uses `dialpad_events.json`, generated from Linux UAPI `input-event-codes.h` without loading a native library:

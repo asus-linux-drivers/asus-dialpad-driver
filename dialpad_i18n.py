@@ -6,6 +6,7 @@ imports this module; translation never touches the layout model or user data.
 """
 from __future__ import annotations
 
+from collections import Counter
 import json
 import logging
 from pathlib import Path
@@ -71,7 +72,9 @@ def manager_settings():
 
 
 def _fields(template):
-    return {name for _literal, name, _format, _conversion in Formatter().parse(template) if name is not None}
+    # Order may differ between languages, but each use must preserve formatting.
+    return Counter((name, spec, conversion) for _literal, name, spec, conversion
+                   in Formatter().parse(template) if name is not None)
 
 
 def load_catalog(language, directory=CATALOG_DIR):

@@ -536,7 +536,7 @@ def publish_runtime_snapshot(snapshot):
     load_all_config_values(snapshot.prepared.settings)
     if socket_enabled:
         send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons,
-                        "title": None, "value": None})
+                        "title": None, "selected_index": None, "value": None})
         request_ring_metadata(snapshot)
 
 def get_active_window_gnome_wayland_title():
@@ -812,7 +812,8 @@ def activate_dialpad(persist=True):
         send_to_socket({CONFIG_ENABLED: dialpad})
 
         if multi_app_mode:
-            send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons, "title": None})
+            send_to_socket({"titles": multi_app_mode_titles, "icons": multi_app_mode_icons,
+                            "title": None, "selected_index": None})
 
 def deactivate_dialpad(persist=True):
     global dialpad
@@ -986,7 +987,7 @@ def request_ring_metadata(snapshot):
                 entry = profile[name]
                 if entry.get("icons") and entry.get("value_query"):
                     icons[index] = entry["icons"].get(get_current_value(entry), icons[index])
-        return {"titles": list(titles), "icons": icons, "title": None}
+        return {"titles": list(titles), "icons": icons, "title": None, "selected_index": None}
     runtime.request_metadata(query)
 
 
@@ -1004,6 +1005,13 @@ def gesture_modifiers(snapshot):
     return pressed_keys & snapshot.prepared.modifiers
 
 
+def gesture_feedback(gesture):
+    """Keep the pinned function identity separate from its display title."""
+    selected_index = (gesture.snapshot.function_names.index(gesture.selected_function)
+                      if gesture.selected_function is not None else None)
+    return {"selected_index": selected_index, "title": gesture.display_title}
+
+
 def center_action(gesture, pressed, now):
     snapshot = gesture.snapshot
     profile = snapshot.profile
@@ -1019,10 +1027,10 @@ def center_action(gesture, pressed, now):
         else:
             gesture.center_activated = not gesture.center_activated
         gesture.display_title = selected.get("title", gesture.selected_function)
-        request_action_metadata(shortcut, selected, {"title": gesture.display_title})
+        request_action_metadata(shortcut, selected, gesture_feedback(gesture))
     else:
         gesture.display_title = shortcut.get("title", gesture.display_title)
-        request_action_metadata(shortcut, {}, {"input": "center", "title": gesture.display_title})
+        request_action_metadata(shortcut, {}, {"input": "center", **gesture_feedback(gesture)})
     return True
 
 
@@ -1036,7 +1044,7 @@ def rotation_action(gesture, direction, pressed, now):
         gesture.display_title = shortcut.get("title", selected.get("title",
                                     gesture.selected_function or gesture.display_title))
         request_action_metadata(shortcut, selected,
-                                {"input": direction, "title": gesture.display_title})
+                                {"input": direction, **gesture_feedback(gesture)})
     return shortcut
 
 
@@ -1045,6 +1053,7 @@ def finish_gesture(now, cancelled=False):
     if not gesture.active:
         return
     gesture.release_pending = True
+    snapshot = gesture.snapshot
     try:
         if not cancelled and dialpad:
             if gesture.pending_rotation:
@@ -1057,12 +1066,12 @@ def finish_gesture(now, cancelled=False):
         if cancelled:
             gesture.reset()
         else:
-            snapshot = gesture.snapshot
             gesture.finish()
-            if not gesture.center_activated and any(snapshot.function_names) and socket_enabled:
-                send_to_socket({"titles": list(snapshot.function_titles),
-                                "icons": list(multi_app_mode_icons), "title": None})
-                request_ring_metadata(snapshot)
+        if not gesture.center_activated and any(snapshot.function_names) and socket_enabled:
+            send_to_socket({"titles": list(snapshot.function_titles),
+                            "icons": list(multi_app_mode_icons), "title": None,
+                            "selected_index": None})
+            request_ring_metadata(snapshot)
     finally:
         gesture.release_pending = False
 
@@ -1113,7 +1122,7 @@ def process_touch_frame(now):
             gesture.center_immediate = False
             gesture.last_angle = None
             if socket_enabled:
-                send_to_socket({"input": "center", "value": 1, "title": gesture.display_title})
+                send_to_socket({"input": "center", "value": 1, **gesture_feedback(gesture)})
         if not gesture.center_immediate:
             gesture.center_immediate = center_action(gesture, True, now)
         return
@@ -1121,7 +1130,7 @@ def process_touch_frame(now):
         gesture.center_triggered = False
         gesture.center_immediate = False
         if socket_enabled:
-            send_to_socket({"input": "center", "value": 0, "title": gesture.display_title})
+            send_to_socket({"input": "center", "value": 0, **gesture_feedback(gesture)})
 
     if any(snapshot.function_names) and not gesture.center_activated:
         current_slice = int(angle // (360 / len(snapshot.function_names)))
@@ -1134,7 +1143,7 @@ def process_touch_frame(now):
             if socket_enabled:
                 send_to_socket({"titles": list(snapshot.function_titles),
                                 "icons": list(multi_app_mode_icons),
-                                "title": gesture.display_title})
+                                **gesture_feedback(gesture)})
         return
     if gesture.last_angle is None:
         gesture.last_angle = gesture.angle_start = angle
@@ -1154,14 +1163,14 @@ def process_touch_frame(now):
     if socket_enabled and threshold >= socket_send_progress_above_treshold and delta:
         send_to_socket({"value_angle_start": gesture.angle_start,
                         "value": int(max(-100, min(100, gesture.angle_accumulator / threshold * 100))),
-                        "title": gesture.display_title, "value_show_only_progress": True})
+                        **gesture_feedback(gesture), "value_show_only_progress": True})
     if abs(gesture.angle_accumulator) >= threshold:
         shortcut = rotation_action(gesture, direction, True, now)
         if shortcut is None:
             gesture.pending_rotation = direction
         gesture.angle_accumulator = 0
         if socket_enabled and threshold >= socket_send_progress_above_treshold:
-            send_to_socket({"value": 0, "title": gesture.display_title,
+            send_to_socket({"value": 0, **gesture_feedback(gesture),
                             "value_show_only_progress": True})
 
 

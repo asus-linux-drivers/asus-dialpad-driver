@@ -33,6 +33,8 @@
 - Preserve external edits and invalid JSON drafts in the manager; avoid accessing destroyed list items after saving a new draft during navigation.
 - Fall back to tool labels for missing or unreadable icons; wrap long labels with explicit overflow ellipses, and align icons and highlighted sectors clockwise from the top for non-quadrant slice counts.
 - Open event-value help, rather than executable display-query help, when F1 is pressed in a numeric relative-event field.
+- Select tool-ring highlight sectors by stable function index even for duplicate or empty titles; match the reserved `none` rule only after binary and window-title rules fail.
+- Reject translated placeholders with incompatible format specifications or conversions, falling back to English; clean project-owned service and privileged artifacts from partial installs even when `dialpad.py` is missing.
 
 ## 2.5.2 (30.8.2026)
 

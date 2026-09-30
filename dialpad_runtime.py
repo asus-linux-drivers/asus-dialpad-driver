@@ -33,7 +33,7 @@ def select_profile(compiled, binary=None, title=None, suppress=False):
             if text:
                 lowered = text.lower()
                 for name, profile in compiled.items():
-                    if name in lowered:
+                    if name != "none" and name in lowered:
                         return name, profile
     return "none", compiled["none"]
 

@@ -133,6 +133,8 @@ $ git checkout v2.5.2
 or customized install:
 
 ```
+$ bash install.sh
+
 # ENV VARS (with the defaults)
 INSTALL_DIR_PATH="/usr/share/asus-dialpad-driver"
 LOGS_DIR_PATH="/var/log/asus-dialpad-driver" # only for install and uninstall logs

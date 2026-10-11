@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.6.0 (11.10.2026)
+
+### Feature
+
+- Added controling the backlight via `hidraw` (I2C stays as a fallback) (credits @lordyoyi, @ldrahnik)
+
+### Fixed
+
+- `KDE` Wayland login crashes (credits @siddolo)
+- Write permissions when creating config
+- Using config on `NixOS`
+- Missing `qttools` in the path for `NixOS`
+
 ## 2.5.2 (30.8.2026)
 
 ### Fixed

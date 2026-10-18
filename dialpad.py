@@ -1294,6 +1294,20 @@ def reset_center():
 
 window_binary = None
 
+def iter_input_events(input_device):
+    """Recover the physical source after SYN_DROPPED without recursion."""
+    while not stop_threads:
+        try:
+            for event in input_device.events():
+                if not event.matches(EV_SYN.SYN_DROPPED):
+                    yield event
+        except device.EventsDroppedException:
+            # Do not turn synthetic state-recovery events into user shortcuts.
+            for _ in input_device.sync():
+                pass
+            yield InputEvent(EV_SYN.SYN_DROPPED, 0)
+
+
 def listen_touchpad_events():
     global slices_minimum_count, activation_time, last_event_time, dialpad, active_modifiers, coactivator_keys, title, treshold, multi_app_mode_titles, app_specific_shortcuts, window_binary
 
@@ -1331,7 +1345,27 @@ def listen_touchpad_events():
             last_trigger_angle = None
             last_angle = None
 
-            for event in d_t.events():
+            resync_wait_for_release = False
+            for event in iter_input_events(d_t):
+                if event.matches(EV_SYN.SYN_DROPPED):
+                    if tap_disabled:
+                        set_touchpad_prop_send_events(1)
+                    touch_x, touch_y = None, None
+                    finger_detected = False
+                    touch_start_time = None
+                    within_top_right_icon = icon_activated = False
+                    center_button_triggered = center_activated = False
+                    coactivator_blocked = tap_disabled = False
+                    last_slice = angle_start = last_angle = last_trigger_angle = None
+                    first_touch_outside = title = treshold = None
+                    angle_accumulator = center_enter_time = 0
+                    resync_wait_for_release = bool(d_t.value[EV_KEY.BTN_TOUCH] or d_t.value[EV_KEY.BTN_TOOL_FINGER])
+                    continue
+                if resync_wait_for_release:
+                    if event.value == 0 and (event.matches(EV_KEY.BTN_TOUCH) or
+                            (event.matches(EV_KEY.BTN_TOOL_FINGER) and d_t.value[EV_KEY.BTN_TOUCH] is None)):
+                        resync_wait_for_release = False
+                    continue
 
                 last_event_time = time()
 
@@ -1626,11 +1660,6 @@ def listen_touchpad_events():
                             log.debug("Touch outside the circle for first time. Ignoring.")
                             first_touch_outside = None
 
-    except device.EventsDroppedException:
-        for e in dev.sync(True):
-            pass
-
-        listen_touchpad_events()
     except Exception:
         log.exception("Error in listen_touchpad_events")
 
@@ -1805,7 +1834,11 @@ def listen_keyboard_events():
         fd_k = open('/dev/input/event' + str(keyboard), 'rb')
         d_k = Device(fd_k)
 
-        for event in d_k.events():
+        for event in iter_input_events(d_k):
+            if event.matches(EV_SYN.SYN_DROPPED):
+                active_modifiers.clear()
+                active_modifiers.update(key for key in modifiers | coactivator_modifiers if d_k.value[key])
+                continue
 
             if event.type == EV_KEY and (event.code in modifiers or event.code in coactivator_modifiers):
 
@@ -1816,11 +1849,8 @@ def listen_keyboard_events():
 
                 log.debug(f"Active modifiers: {active_modifiers}")
 
-    except device.EventsDroppedException:
-        for e in dev.sync(True):
-            pass
     except Exception as e:
-        log.error(f"Error in listen_touchpad_events: {e}")
+        log.error(f"Error in listen_keyboard_events: {e}")
 
 # default are for unicode shortcuts + is loaded layout during start (BackSpace, Return - enter, asterisk, minus etc. can be found using xev)
 def set_defaults_keysym_name_associated_to_evdev_key_reflecting_current_layout():

@@ -288,6 +288,21 @@ while try_times > 0:
 
     sleep(try_sleep)
 
+def find_touchpad_hidraw(event_name, sysfs_root="/sys", dev_root="/dev"):
+    input_path = os.path.realpath(os.path.join(sysfs_root, "class/input", event_name, "device"))
+    if not os.path.exists(input_path):
+        return None
+
+    # Match the HID ancestor of this input node, not a device number or bus.
+    for node in sorted(glob.glob(os.path.join(sysfs_root, "class/hidraw/hidraw*"))):
+        hid_path = os.path.realpath(os.path.join(node, "device"))
+        if os.path.exists(hid_path) and (input_path == hid_path or input_path.startswith(hid_path + os.sep)):
+            return os.path.join(dev_root, os.path.basename(node))
+    return None
+
+
+hidraw_path = find_touchpad_hidraw(f"event{touchpad}")
+
 # Is the hidraw node of the touchpad usable? (preferred way, I2C is a fallback)
 if hidraw_path:
     try:

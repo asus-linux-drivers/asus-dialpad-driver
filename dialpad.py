@@ -241,6 +241,19 @@ while try_times > 0:
                     device_id = re.sub(r".*i2c-(\d+)/.*$", r'\1', line).replace("\n", "")
                     log.info('Set touchpad device id %s from %s', device_id, line.strip())
 
+                    # search hidraw
+                    sysfs_path = line.strip().split("Sysfs=")[-1]
+                    hid_device_path = os.path.dirname(
+                        os.path.dirname("/sys" + sysfs_path)
+                    )
+                    hidraw_nodes = glob.glob(
+                        hid_device_path + "/hidraw/hidraw*"
+                    )
+
+                    if hidraw_nodes:
+                        hidraw_path = "/dev/" + os.path.basename(hidraw_nodes[0])
+                        log.info("Set touchpad hidraw node %s", hidraw_path)
+
                 if "H: " in line:
                     touchpad = line.split("event")[1]
                     touchpad = touchpad.split(" ")[0]
